@@ -55,24 +55,52 @@ fi
 [ -x /etc/init.d/nikki ] || fail "Nikki не установился"
 
 say "Настройка подписки"
-uci -q batch <<EOF
+previous_profile="$(uci -q get nikki.config.profile || true)"
+
+# Repair the default section only when an older NikkiGo version overwrote it.
+if [ "$(uci -q get nikki.subscription.name || true)" = 'NikkiGo' ]; then
+	uci -q batch <<EOF
 set nikki.subscription=subscription
-set nikki.subscription.name='NikkiGo'
-set nikki.subscription.url='$subscription_url'
+set nikki.subscription.name='default'
+set nikki.subscription.url='http://example.com/default.yaml'
 set nikki.subscription.user_agent='clash'
 set nikki.subscription.prefer='remote'
-set nikki.config.profile='subscription:subscription'
-set nikki.config.enabled='1'
+commit nikki
+EOF
+	uci -q delete nikki.subscription.success || true
+	uci -q delete nikki.subscription.update || true
+	uci commit nikki
+fi
+
+uci -q batch <<EOF
+set nikki.ssh_transibservice=subscription
+set nikki.ssh_transibservice.name='SSH_TransibService'
+set nikki.ssh_transibservice.url='$subscription_url'
+set nikki.ssh_transibservice.user_agent='Clash.Meta'
+set nikki.ssh_transibservice.prefer='remote'
 commit nikki
 EOF
 unset subscription_url NIKKIGO_SUBSCRIPTION_B64
 
 say "Загрузка и проверка подписки"
-/etc/init.d/nikki update_subscription subscription
-success="$(uci -q get nikki.subscription.success || true)"
-[ "$success" = '1' ] || fail "Nikki не смог загрузить или проверить подписку"
+/etc/init.d/nikki update_subscription ssh_transibservice
+success="$(uci -q get nikki.ssh_transibservice.success || true)"
+if [ "$success" != '1' ]; then
+	say "Последние сообщения Nikki:"
+	tail -n 10 /var/log/nikki/app.log 2>/dev/null || true
+	if [ -n "$previous_profile" ]; then
+		uci set "nikki.config.profile=$previous_profile"
+		uci commit nikki
+	fi
+	fail "Nikki не смог загрузить или проверить подписку; прежний профиль сохранён"
+fi
 
 say "Включение и запуск Nikki"
+uci -q batch <<EOF
+set nikki.config.profile='subscription:ssh_transibservice'
+set nikki.config.enabled='1'
+commit nikki
+EOF
 /etc/init.d/nikki enable
 /etc/init.d/nikki restart
 sleep 3
@@ -83,3 +111,8 @@ else
 	logread -e Nikki 2>/dev/null | tail -n 20 || true
 	fail "служба Nikki не запустилась"
 fi
+
+say "Настройка ежедневного обновления подписки на 05:00"
+sed -i '/# nikkigo-update$/d' /etc/crontabs/root
+echo '0 5 * * * /etc/init.d/nikki update_subscription ssh_transibservice; [ "$(uci -q get nikki.ssh_transibservice.success)" = "1" ] && /etc/init.d/nikki reload # nikkigo-update' >> /etc/crontabs/root
+/etc/init.d/cron restart
