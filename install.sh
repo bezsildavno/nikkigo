@@ -7,13 +7,23 @@ UPSTREAM_URL='https://github.com/lanetsky/nikkiopen'
 SUPPORT_BOT='@transib_service_gena_bot'
 SUPPORT_SHOWN=0
 
+if [ -t 1 ] && [ "${TERM:-dumb}" != 'dumb' ]; then
+	C_RESET="$(printf '\033[0m')"
+	C_RED="$(printf '\033[31m')"
+	C_GREEN="$(printf '\033[32m')"
+	C_YELLOW="$(printf '\033[33m')"
+	C_CYAN="$(printf '\033[36m')"
+else
+	C_RESET= C_RED= C_GREEN= C_YELLOW= C_CYAN=
+fi
+
 say() {
-	printf '%s\n' "$*"
+	printf '%s%s%s\n' "$C_CYAN" "$*" "$C_RESET"
 }
 
 fail() {
 	SUPPORT_SHOWN=1
-	printf 'Ошибка: %s\n' "$*" >&2
+	printf '%sОшибка: %s%s\n' "$C_RED" "$*" "$C_RESET" >&2
 	printf 'Если нужна помощь, напишите в Telegram-бот: %s\n' "$SUPPORT_BOT" >&2
 	printf 'Пришлите скриншот окна от команды запуска до ошибки\n' >&2
 	printf 'или скопируйте и отправьте весь текст из консоли.\n' >&2
@@ -53,7 +63,8 @@ trap 'cancel_input 130' INT TERM HUP
 
 read_input() {
 	prompt="$1"
-	printf '%s: ' "$prompt"
+	printf '\n%s>>> ТРЕБУЕТСЯ ДЕЙСТВИЕ <<<%s\n' "$C_YELLOW" "$C_RESET"
+	printf '%s%s:%s ' "$C_YELLOW" "$prompt" "$C_RESET"
 
 	if [ ! -t 0 ]; then
 		IFS= read -r REPLY

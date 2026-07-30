@@ -9,6 +9,22 @@ SUPPORT_BOT='@transib_service_gena_bot'
 CURRENT_STAGE='запуск'
 SUPPORT_SHOWN=0
 
+if [ -t 1 ] && [ "${TERM:-dumb}" != 'dumb' ]; then
+	C_RESET="$(printf '\033[0m')"
+	C_BOLD="$(printf '\033[1m')"
+	C_RED="$(printf '\033[31m')"
+	C_GREEN="$(printf '\033[32m')"
+	C_YELLOW="$(printf '\033[33m')"
+	C_CYAN="$(printf '\033[36m')"
+else
+	C_RESET=
+	C_BOLD=
+	C_RED=
+	C_GREEN=
+	C_YELLOW=
+	C_CYAN=
+fi
+
 [ -n "${NIKKIGO_SAFETY_PATH:-}" ] && [ -r "$NIKKIGO_SAFETY_PATH" ] || {
 	printf '[NikkiGo] Ошибка: модуль безопасности не загружен\n' >&2
 	exit 1
@@ -16,7 +32,14 @@ SUPPORT_SHOWN=0
 . "$NIKKIGO_SAFETY_PATH"
 
 say() {
-	printf '[NikkiGo] %s\n' "$*"
+	message="$*"
+	color="$C_CYAN"
+	case "$message" in
+		Ошибка:*|*"не удалось"*|*"не пройдена"*) color="$C_RED" ;;
+		Предупреждение:*|ВНИМАНИЕ:*|*"пока не"*) color="$C_YELLOW" ;;
+		*"успешно"*|*"установлен."*|*"работают."*|*"восстановлен."*) color="$C_GREEN" ;;
+	esac
+	printf '%s[NikkiGo] %s%s\n' "$color" "$message" "$C_RESET"
 }
 
 show_support() {
@@ -27,7 +50,7 @@ show_support() {
 }
 
 fail() {
-	printf '[NikkiGo] Ошибка: %s\n' "$*" >&2
+	printf '%s[NikkiGo] Ошибка: %s%s\n' "$C_RED$C_BOLD" "$*" "$C_RESET" >&2
 	show_diagnostics 1 >&2
 	show_support >&2
 	exit 1
@@ -86,7 +109,8 @@ restore_remote_terminal() {
 
 read_remote_input() {
 	prompt="$1"
-	printf '[NikkiGo] %s: ' "$prompt"
+	printf '\n%s%s[NikkiGo] >>> ТРЕБУЕТСЯ ДЕЙСТВИЕ <<<%s\n' "$C_YELLOW" "$C_BOLD" "$C_RESET"
+	printf '%s[NikkiGo] %s:%s ' "$C_YELLOW" "$prompt" "$C_RESET"
 	if ! command -v stty >/dev/null 2>&1 ||
 		! command -v od >/dev/null 2>&1 ||
 		[ ! -r /dev/tty ]; then

@@ -24,6 +24,7 @@ function Test-RouterAddress([string]$Address) {
 
 function Read-NikkiInput([string]$Prompt) {
     if ([Console]::IsInputRedirected) {
+        Write-Host '>>> ТРЕБУЕТСЯ ДЕЙСТВИЕ <<<' -ForegroundColor Yellow
         $value = Read-Host $Prompt
         if ($value -eq [string][char]27) {
             throw [OperationCanceledException]::new('Отменено пользователем.')
@@ -31,7 +32,8 @@ function Read-NikkiInput([string]$Prompt) {
         return $value
     }
 
-    Write-Host -NoNewline "${Prompt}: "
+    Write-Host '>>> ТРЕБУЕТСЯ ДЕЙСТВИЕ <<<' -ForegroundColor Yellow
+    Write-Host -NoNewline "${Prompt}: " -ForegroundColor Yellow
     $value = [Text.StringBuilder]::new()
     while ($true) {
         $key = [Console]::ReadKey($true)
