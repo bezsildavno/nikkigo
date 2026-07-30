@@ -119,7 +119,7 @@ say "  Это нормально: клавиатура работает, пар�
 say ""
 say "Ожидание SSH..."
 printf '%s\n' "$payload_b64" |
-	ssh -T -p "$ssh_port" "$ssh_user@$router" "base64 -d | ash"
+	ssh -T -p "$ssh_port" "$ssh_user@$router" "tr -d '\r\n' | base64 -d | ash"
 unset payload_b64
 
 say ""
