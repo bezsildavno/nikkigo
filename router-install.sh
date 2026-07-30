@@ -152,8 +152,8 @@ fi
 
 if [ "$action" = 'remove' ]; then
 	say "ВНИМАНИЕ: будут удалены NikkiOpen, подписки, настройки и логи."
-	read_remote_input "Для подтверждения введите УДАЛИТЬ"
-	[ "$REPLY" = 'УДАЛИТЬ' ] ||
+	read_remote_input "Для подтверждения введите 1337"
+	[ "$REPLY" = '1337' ] ||
 		fail "удаление не подтверждено; изменения не внесены"
 	CURRENT_STAGE='удаление NikkiOpen'
 	sed -i '/# nikkigo-update$/d' /etc/crontabs/root 2>/dev/null || true
