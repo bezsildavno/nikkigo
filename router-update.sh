@@ -23,7 +23,10 @@ finish() {
 trap finish EXIT
 trap 'reason="обновление прервано"; exit 1' INT TERM
 
-backup_state
+backup_state || {
+	reason='не удалось создать резервную копию'
+	exit 1
+}
 if ! /etc/init.d/nikki update_subscription "$SECTION"; then
 	reason='ошибка загрузки подписки'
 	rollback

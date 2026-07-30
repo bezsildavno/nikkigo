@@ -15,14 +15,30 @@ safe_log() {
 }
 
 backup_state() {
-	mkdir -p "$NIKKIGO_STATE_DIR"
-	cp -p "$NIKKIGO_CONFIG" "$NIKKIGO_STATE_DIR/nikki.uci" 2>/dev/null || :
-	mkdir -p "$NIKKIGO_STATE_DIR/subscriptions"
-	if [ -d "$NIKKIGO_SUBSCRIPTIONS" ]; then
-		cp -p "$NIKKIGO_SUBSCRIPTIONS"/*.yaml "$NIKKIGO_STATE_DIR/subscriptions/" 2>/dev/null || :
+	if ! mkdir -p "$NIKKIGO_STATE_DIR/subscriptions"; then
+		safe_log "Не удалось создать временный каталог резервной копии."
+		return 1
 	fi
-	uci -q get nikki.config.enabled > "$NIKKIGO_STATE_DIR/enabled" 2>/dev/null || printf '0\n' > "$NIKKIGO_STATE_DIR/enabled"
-	if "$NIKKIGO_SERVICE" running >/dev/null 2>&1; then
+	if [ -f "$NIKKIGO_CONFIG" ]; then
+		if ! cp -p "$NIKKIGO_CONFIG" "$NIKKIGO_STATE_DIR/nikki.uci"; then
+			safe_log "Не удалось сохранить конфигурацию Nikki."
+			return 1
+		fi
+	fi
+	if [ -d "$NIKKIGO_SUBSCRIPTIONS" ]; then
+		for subscription_backup in "$NIKKIGO_SUBSCRIPTIONS"/*.yaml; do
+			[ -f "$subscription_backup" ] || continue
+			if ! cp -p "$subscription_backup" "$NIKKIGO_STATE_DIR/subscriptions/"; then
+				safe_log "Не удалось сохранить существующие подписки."
+				return 1
+			fi
+		done
+	fi
+	if ! uci -q get nikki.config.enabled > "$NIKKIGO_STATE_DIR/enabled" 2>/dev/null; then
+		printf '0\n' > "$NIKKIGO_STATE_DIR/enabled"
+	fi
+	if [ -x "$NIKKIGO_SERVICE" ] &&
+		"$NIKKIGO_SERVICE" running >/dev/null 2>&1; then
 		printf '1\n' > "$NIKKIGO_STATE_DIR/running"
 		if health_check; then
 			printf '1\n' > "$NIKKIGO_STATE_DIR/healthy"
@@ -34,6 +50,7 @@ backup_state() {
 		printf '0\n' > "$NIKKIGO_STATE_DIR/healthy"
 	fi
 	NIKKIGO_TRANSACTION=1
+	return 0
 }
 
 enable_fail_open() {

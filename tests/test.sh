@@ -53,6 +53,20 @@ chmod +x "$fresh/bin/uci"
 ) || fail 'fresh install fail-open without UCI config'
 pass 'fresh install fail-open without UCI config'
 
+(
+	PATH="$fresh/bin:$PATH"
+	NIKKIGO_STATE_DIR="$fresh/empty-state"
+	NIKKIGO_CONFIG="$fresh/missing-nikki-config"
+	NIKKIGO_SUBSCRIPTIONS="$fresh/missing-subscriptions"
+	NIKKIGO_SERVICE="$fresh/missing-nikki-service"
+	. "$ROOT/router-safety.sh"
+	backup_state
+	[ "$NIKKIGO_TRANSACTION" = '1' ]
+	[ "$(cat "$NIKKIGO_STATE_DIR/enabled")" = '0' ]
+	[ "$(cat "$NIKKIGO_STATE_DIR/running")" = '0' ]
+) || fail 'backup on completely fresh router'
+pass 'backup on completely fresh router'
+
 grep -q 'restore_state' "$ROOT/router-update.sh" &&
 	grep -q 'health_check' "$ROOT/router-update.sh" &&
 	grep -q 'try_recover_proxies' "$ROOT/router-update.sh" ||

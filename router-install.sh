@@ -179,7 +179,9 @@ fi
 
 CURRENT_STAGE='создание резервной копии рабочего состояния'
 say "Сохранение текущей конфигурации и состояния NikkiOpen"
-backup_state
+if ! backup_state; then
+	fail "не удалось создать резервную копию перед установкой"
+fi
 enable_fail_open
 say "Предварительная загрузка Zashboard"
 prepare_zashboard ||
