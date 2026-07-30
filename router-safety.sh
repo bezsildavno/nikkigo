@@ -37,9 +37,14 @@ backup_state() {
 }
 
 enable_fail_open() {
-	"$NIKKIGO_SERVICE" stop >/dev/null 2>&1 || :
-	uci -q set nikki.config.enabled='0'
-	uci -q commit nikki
+	if [ -x "$NIKKIGO_SERVICE" ]; then
+		"$NIKKIGO_SERVICE" stop >/dev/null 2>&1 || :
+	fi
+	if [ -f "$NIKKIGO_CONFIG" ] &&
+		uci -q get nikki.config >/dev/null 2>&1; then
+		uci -q set nikki.config.enabled='0'
+		uci -q commit nikki
+	fi
 	safe_log "Nikki отключён, обычный интернет восстановлен."
 }
 

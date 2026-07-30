@@ -37,6 +37,22 @@ grep -q 'DIRECT' "$ROOT/tests/fixtures/success.yaml" ||
 	fail 'profile without DIRECT fixture'
 pass 'profile fixtures'
 
+fresh="$TMP/fresh-install"
+mkdir -p "$fresh/bin"
+cat > "$fresh/bin/uci" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "$fresh/bin/uci"
+(
+	PATH="$fresh/bin:$PATH"
+	NIKKIGO_CONFIG="$fresh/missing-nikki-config"
+	NIKKIGO_SERVICE="$fresh/missing-nikki-service"
+	. "$ROOT/router-safety.sh"
+	enable_fail_open >/dev/null
+) || fail 'fresh install fail-open without UCI config'
+pass 'fresh install fail-open without UCI config'
+
 grep -q 'restore_state' "$ROOT/router-update.sh" &&
 	grep -q 'health_check' "$ROOT/router-update.sh" &&
 	grep -q 'try_recover_proxies' "$ROOT/router-update.sh" ||
