@@ -2,6 +2,7 @@
 set -eu
 
 UPSTREAM_INSTALLER='https://raw.githubusercontent.com/lanetsky/nikkiopen/main/install.sh'
+UPSTREAM_UNINSTALLER='https://raw.githubusercontent.com/lanetsky/nikkiopen/main/uninstall.sh'
 UPSTREAM_REPOSITORY='https://github.com/lanetsky/nikkiopen'
 SUPPORT_BOT='@transib_service_gena_bot'
 CURRENT_STAGE='запуск'
@@ -22,8 +23,67 @@ fail() {
 	exit 1
 }
 
+REMOTE_TTY_STATE=
+
+restore_remote_terminal() {
+	if [ -n "$REMOTE_TTY_STATE" ]; then
+		stty "$REMOTE_TTY_STATE" </dev/tty 2>/dev/null || true
+		REMOTE_TTY_STATE=
+	fi
+}
+
+read_remote_input() {
+	prompt="$1"
+	printf '[NikkiGo] %s: ' "$prompt"
+	if ! command -v stty >/dev/null 2>&1 ||
+		! command -v od >/dev/null 2>&1 ||
+		[ ! -r /dev/tty ]; then
+		IFS= read -r REPLY
+		return
+	fi
+	REMOTE_TTY_STATE="$(stty -g </dev/tty)"
+	stty -icanon -echo min 1 time 0 </dev/tty
+	value=
+	while :; do
+		code="$(
+			dd if=/dev/tty bs=1 count=1 2>/dev/null |
+				od -An -tu1 |
+				tr -d ' '
+		)"
+		[ -n "$code" ] || continue
+		case "$code" in
+			27)
+				restore_remote_terminal
+				printf '\n[NikkiGo] Отменено пользователем.\n'
+				exit 0
+				;;
+			3)
+				restore_remote_terminal
+				exit 130
+				;;
+			10|13) break ;;
+			8|127)
+				if [ -n "$value" ]; then
+					value="${value%?}"
+					printf '\b \b'
+				fi
+				;;
+			*)
+				octal="$(printf '%03o' "$code")"
+				char="$(printf "\\$octal")"
+				value="${value}${char}"
+				printf '%s' "$char"
+				;;
+		esac
+	done
+	restore_remote_terminal
+	printf '\n'
+	REPLY="$value"
+}
+
 cleanup() {
-	unset NIKKIGO_SUBSCRIPTION_B64 subscription_url
+	restore_remote_terminal
+	unset NIKKIGO_ROUTER_ADDRESS_B64 router_address subscription_url action
 }
 
 finish() {
@@ -50,16 +110,108 @@ CURRENT_STAGE='проверка прав и совместимости роут�
 command -v uci >/dev/null 2>&1 || fail "не найден uci"
 command -v wget >/dev/null 2>&1 || fail "не найден wget"
 
-CURRENT_STAGE='проверка ссылки подписки'
-[ -n "${NIKKIGO_SUBSCRIPTION_B64:-}" ] || fail "не передана подписка"
-subscription_url="$(
-	printf '%s' "$NIKKIGO_SUBSCRIPTION_B64" |
+CURRENT_STAGE='определение адреса панели управления'
+[ -n "${NIKKIGO_ROUTER_ADDRESS_B64:-}" ] || fail "не передан адрес роутера"
+router_address="$(
+	printf '%s' "$NIKKIGO_ROUTER_ADDRESS_B64" |
 		base64 -d 2>/dev/null
-)" || fail "не удалось прочитать подписку"
+)" || fail "не удалось прочитать адрес роутера"
+unset NIKKIGO_ROUTER_ADDRESS_B64
 
+CURRENT_STAGE='проверка доступа к GitHub'
+say "Проверка соединения с GitHub"
+wget -q --spider 'https://github.com' ||
+	fail "роутер не может подключиться к GitHub. Проверьте интернет, DNS и время на роутере"
+
+if [ -x /etc/init.d/nikki ]; then
+	if [ -x /bin/opkg ]; then
+		installed_version="$(opkg status nikki 2>/dev/null | awk -F': ' '$1 == "Version" { print $2; exit }')"
+	elif [ -x /usr/bin/apk ]; then
+		installed_version="$(apk list --installed nikki 2>/dev/null | sed -n '1s/.*-//p')"
+	else
+		installed_version=
+	fi
+	say "NikkiOpen уже установлен${installed_version:+, версия $installed_version}."
+	say "1 — обновить NikkiOpen и настроить подписку"
+	say "2 — удалить NikkiOpen и его конфигурацию"
+	say "3 — выйти без изменений"
+	read_remote_input "Выберите действие [1]"
+	action="${REPLY:-1}"
+	case "$action" in
+		1) action='update' ;;
+		2) action='remove' ;;
+		3) say "Выход без изменений."; exit 0 ;;
+		*) fail "неизвестное действие: $action" ;;
+	esac
+else
+	action='install'
+	say "NikkiOpen не обнаружен. Будет выполнена установка."
+fi
+
+if [ "$action" = 'remove' ]; then
+	say "ВНИМАНИЕ: будут удалены NikkiOpen, подписки, настройки и логи."
+	read_remote_input "Для подтверждения введите УДАЛИТЬ"
+	[ "$REPLY" = 'УДАЛИТЬ' ] ||
+		fail "удаление не подтверждено; изменения не внесены"
+	CURRENT_STAGE='удаление NikkiOpen'
+	sed -i '/# nikkigo-update$/d' /etc/crontabs/root 2>/dev/null || true
+	/etc/init.d/cron restart 2>/dev/null || true
+	if ! wget -qO- "$UPSTREAM_UNINSTALLER" | ash; then
+		fail "штатное удаление NikkiOpen завершилось ошибкой"
+	fi
+	say "NikkiOpen и его конфигурация удалены."
+	exit 0
+fi
+
+CURRENT_STAGE='подготовка менеджера пакетов'
+free_kb="$(df -Pk /overlay 2>/dev/null | awk 'NR == 2 { print $4 }')"
+if [ -n "$free_kb" ] && [ "$free_kb" -lt 32768 ]; then
+	say "Предупреждение: в /overlay свободно меньше 32 МБ."
+	say "Если установка пакетов не завершится, освободите место и повторите попытку."
+fi
+
+if [ -x /bin/opkg ]; then
+	say "Обновление списков пакетов opkg"
+	opkg update ||
+		fail "opkg update завершился ошибкой. Проверьте feeds, интернет, DNS и системное время"
+elif [ -x /usr/bin/apk ]; then
+	say "Обновление списков пакетов apk"
+	apk update ||
+		fail "apk update завершился ошибкой. Проверьте репозитории, интернет, DNS и системное время"
+else
+	fail "не найден поддерживаемый менеджер пакетов opkg или apk"
+fi
+
+CURRENT_STAGE="${action} NikkiOpen и зависимостей"
+if [ "$action" = 'update' ]; then
+	say "Обновление NikkiOpen из $UPSTREAM_REPOSITORY"
+else
+	say "Установка NikkiOpen из $UPSTREAM_REPOSITORY"
+fi
+if ! LUCI_I18N=1 wget -qO- "$UPSTREAM_INSTALLER" | ash; then
+	say "Не удалось автоматически установить или обновить NikkiOpen."
+	say "Проверьте ошибки пакетного менеджера выше."
+	say "Основные зависимости: ca-bundle curl yq firewall4 ip-full"
+	say "Модули ядра: kmod-inet-diag kmod-nft-socket kmod-nft-tproxy kmod-tun kmod-dummy"
+	say "Ручная установка и готовые пакеты: $UPSTREAM_REPOSITORY/releases"
+	fail "ошибка установки NikkiOpen или его зависимостей"
+fi
+
+[ -x /etc/init.d/nikki ] || fail "NikkiOpen не установился"
+say "Автообновление самого пакета upstream не предоставляет."
+say "NikkiGo включит автоматическое обновление подписки."
+
+CURRENT_STAGE='ввод ссылки подписки'
+if uci -q get nikki.ssh_transibservice >/dev/null 2>&1; then
+	say "Подписка SSH_TransibService уже существует."
+	say "Новая копия создана не будет; существующая подписка будет обновлена."
+fi
+read_remote_input "Вставьте ссылку подписки"
+subscription_url="$REPLY"
+[ -n "$subscription_url" ] || fail "ссылка подписки не указана"
 case "$subscription_url" in
 	http://*|https://*) ;;
-	*) fail "некорректная ссылка подписки" ;;
+	*) fail "ссылка должна начинаться с http:// или https://" ;;
 esac
 case "$subscription_url" in
 	*"'"*) fail "ссылка содержит недопустимый символ" ;;
@@ -69,46 +221,14 @@ sanitized_url="$(printf '%s' "$subscription_url" | tr -d '\r\n')"
 	fail "ссылка содержит перенос строки"
 unset sanitized_url
 
-CURRENT_STAGE='проверка доступа к GitHub'
-say "Проверка соединения с GitHub"
-wget -q --spider 'https://github.com' ||
-	fail "роутер не может подключиться к GitHub. Проверьте интернет, DNS и время на роутере"
-
-if [ ! -x /etc/init.d/nikki ]; then
-	CURRENT_STAGE='подготовка менеджера пакетов'
-	free_kb="$(df -Pk /overlay 2>/dev/null | awk 'NR == 2 { print $4 }')"
-	if [ -n "$free_kb" ] && [ "$free_kb" -lt 32768 ]; then
-		say "Предупреждение: в /overlay свободно меньше 32 МБ."
-		say "Если установка пакетов не завершится, освободите место и повторите попытку."
-	fi
-
-	if [ -x /bin/opkg ]; then
-		say "Обновление списков пакетов opkg"
-		opkg update ||
-			fail "opkg update завершился ошибкой. Проверьте feeds, интернет, DNS и системное время"
-	elif [ -x /usr/bin/apk ]; then
-		say "Обновление списков пакетов apk"
-		apk update ||
-			fail "apk update завершился ошибкой. Проверьте репозитории, интернет, DNS и системное время"
+existing_url="$(uci -q get nikki.ssh_transibservice.url || true)"
+if [ -n "$existing_url" ]; then
+	if [ "$existing_url" = "$subscription_url" ]; then
+		say "Введена та же ссылка. Выполняется обновление существующей подписки."
 	else
-		fail "не найден поддерживаемый менеджер пакетов opkg или apk"
+		say "Ссылка существующей подписки будет заменена новой."
 	fi
-
-	CURRENT_STAGE='установка NikkiOpen и зависимостей'
-	say "Установка NikkiOpen из $UPSTREAM_REPOSITORY"
-	if ! LUCI_I18N=1 wget -qO- "$UPSTREAM_INSTALLER" | ash; then
-		say "Не удалось автоматически установить NikkiOpen."
-		say "Проверьте ошибки пакетного менеджера выше."
-		say "Основные зависимости: ca-bundle curl yq firewall4 ip-full"
-		say "Модули ядра: kmod-inet-diag kmod-nft-socket kmod-nft-tproxy kmod-tun kmod-dummy"
-		say "Ручная установка и готовые пакеты: $UPSTREAM_REPOSITORY/releases"
-		fail "ошибка установки NikkiOpen или его зависимостей"
-	fi
-else
-	say "NikkiOpen уже установлен; переустановка пропущена"
 fi
-
-[ -x /etc/init.d/nikki ] || fail "NikkiOpen не установился"
 
 CURRENT_STAGE='настройка подписки SSH_TransibService'
 say "Настройка подписки"
@@ -176,3 +296,18 @@ say "Настройка ежедневного обновления подпис
 sed -i '/# nikkigo-update$/d' /etc/crontabs/root
 echo '0 5 * * * /etc/init.d/nikki update_subscription ssh_transibservice; [ "$(uci -q get nikki.ssh_transibservice.success)" = "1" ] && /etc/init.d/nikki reload # nikkigo-update' >> /etc/crontabs/root
 /etc/init.d/cron restart
+
+expire_at="$(uci -q get nikki.ssh_transibservice.expire || true)"
+updated_at="$(uci -q get nikki.ssh_transibservice.update || true)"
+say "Подписка SSH_TransibService успешно загружена."
+if [ -n "$updated_at" ]; then
+	say "Последнее обновление: $updated_at"
+fi
+if [ -n "$expire_at" ]; then
+	say "Подписка действует до: $expire_at"
+else
+	say "Провайдер не сообщил дату окончания подписки."
+fi
+say "Панель управления NikkiOpen:"
+say "http://$router_address/cgi-bin/luci/admin/services/nikki"
+say "Если LuCI настроен на HTTPS, замените http:// на https://."

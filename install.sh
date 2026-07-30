@@ -130,11 +130,11 @@ say "============================================================"
 say " NikkiGo — установка NikkiOpen на OpenWrt"
 say "============================================================"
 say ""
-say "Нужно ответить на четыре простых вопроса."
+say "Перед подключением нужно ответить на три простых вопроса."
 say "Значение в [скобках] — стандартное. Чтобы его выбрать, нажмите Enter."
 say "Исходный код NikkiOpen: $UPSTREAM_URL"
 say ""
-say "[Шаг 1 из 4] Адрес роутера"
+say "[Шаг 1 из 3] Адрес роутера"
 say "NikkiGo нашёл роутер по адресу $gateway."
 read_input "Нажмите Enter для $gateway или введите другой адрес"
 router="$REPLY"
@@ -161,47 +161,28 @@ case "$router" in
 esac
 
 say ""
-say "[Шаг 2 из 4] Логин роутера"
+say "[Шаг 2 из 3] Логин роутера"
 say "На большинстве роутеров OpenWrt используется логин root."
 read_input "Нажмите Enter для root или введите другой логин"
 ssh_user="$REPLY"
 ssh_user="${ssh_user:-root}"
 
 say ""
-say "[Шаг 3 из 4] Порт SSH"
+say "[Шаг 3 из 3] Порт SSH"
 say "На большинстве роутеров используется порт 22."
 read_input "Нажмите Enter для 22 или введите другой порт"
 ssh_port="$REPLY"
 ssh_port="${ssh_port:-22}"
 
-say ""
-say "[Шаг 4 из 4] Подписка"
-say "Вставьте полную ссылку подписки и нажмите Enter."
-read_input "Ссылка на подписку"
-subscription="$REPLY"
-[ -n "$subscription" ] || fail "ссылка на подписку не указана"
-
-case "$subscription" in
-	http://*|https://*) ;;
-	*) fail "ссылка должна начинаться с http:// или https://" ;;
-esac
-
-subscription_b64="$(
-	printf '%s' "$subscription" |
-		base64 |
-		tr -d '\r\n'
-)"
-unset subscription
-
 payload_b64="$(
 	{
-		printf "NIKKIGO_SUBSCRIPTION_B64='%s'\n" "$subscription_b64"
+		router_b64="$(printf '%s' "$router" | base64 | tr -d '\r\n')"
+		printf "NIKKIGO_ROUTER_ADDRESS_B64='%s'\n" "$router_b64"
 		download "$BASE_URL/router-install.sh"
 	} |
 		base64 |
 		tr -d '\r\n'
 )"
-unset subscription_b64
 
 say ""
 say "============================================================"
@@ -217,10 +198,11 @@ say "  введите ПАРОЛЬ ОТ РОУТЕРА и нажмите Enter."
 say "  Во время ввода не будет видно ничего — ни точек, ни звёздочек."
 say "  Это нормально: клавиатура работает, пароль вводится."
 say ""
+say "После входа роутер предложит установку, обновление или удаление."
 say "Ожидание SSH..."
-printf '%s\n' "$payload_b64" |
-	ssh -T -p "$ssh_port" "$ssh_user@$router" "tr -d '\r\n' | base64 -d | ash"
+ssh -tt -p "$ssh_port" "$ssh_user@$router" \
+	"printf '%s' '$payload_b64' | base64 -d | ash"
 unset payload_b64
 
 say ""
-say "УСПЕШНО: NikkiOpen настроен и запущен."
+say "NikkiGo завершил работу. Результат показан выше."

@@ -76,12 +76,12 @@ Write-Host '============================================================' -Foreg
 Write-Host ' NikkiGo - NikkiOpen installer for OpenWrt' -ForegroundColor Cyan
 Write-Host '============================================================' -ForegroundColor Cyan
 Write-Host ''
-Write-Host 'You will answer four simple questions.'
+Write-Host 'You will answer three simple questions before connecting.'
 Write-Host 'A value in [brackets] is the default. Press Enter to use it.'
 Write-Host "NikkiOpen source: $UpstreamUrl"
 Write-Host ''
 
-Write-Host '[Step 1 of 4] Router address' -ForegroundColor Yellow
+Write-Host '[Step 1 of 3] Router address' -ForegroundColor Yellow
 Write-Host "NikkiGo found your router at $gateway."
 $router = Read-NikkiInput "Press Enter to use $gateway, or type another address"
 if ([string]::IsNullOrWhiteSpace($router)) { $router = $gateway }
@@ -90,13 +90,13 @@ if (-not (Test-RouterAddress $router)) {
 }
 
 Write-Host ''
-Write-Host '[Step 2 of 4] Router login' -ForegroundColor Yellow
+Write-Host '[Step 2 of 3] Router login' -ForegroundColor Yellow
 Write-Host 'On most OpenWrt routers the login is root.'
 $sshUser = Read-NikkiInput 'Press Enter to use root, or type another login'
 if ([string]::IsNullOrWhiteSpace($sshUser)) { $sshUser = 'root' }
 
 Write-Host ''
-Write-Host '[Step 3 of 4] SSH port' -ForegroundColor Yellow
+Write-Host '[Step 3 of 3] SSH port' -ForegroundColor Yellow
 Write-Host 'On most routers the SSH port is 22.'
 $sshPort = Read-NikkiInput 'Press Enter to use 22, or type another port'
 if ([string]::IsNullOrWhiteSpace($sshPort)) { $sshPort = '22' }
@@ -104,21 +104,11 @@ if ($sshPort -notmatch '^\d{1,5}$' -or [int]$sshPort -gt 65535) {
     Stop-WithError 'Invalid SSH port.'
 }
 
-Write-Host ''
-Write-Host '[Step 4 of 4] Subscription' -ForegroundColor Yellow
-Write-Host 'Paste the complete subscription URL and press Enter.'
-$subscription = Read-NikkiInput 'Subscription URL'
-if ($subscription -notmatch '^https?://') {
-    Stop-WithError 'The URL must start with http:// or https://.'
-}
-
-$subscriptionB64 = [Convert]::ToBase64String(
-    [Text.Encoding]::UTF8.GetBytes($subscription)
-)
-$subscription = $null
-
 $routerScript = (Invoke-WebRequest -UseBasicParsing "$BaseUrl/router-install.sh").Content
-$payload = "NIKKIGO_SUBSCRIPTION_B64='$subscriptionB64'`n$routerScript"
+$routerB64 = [Convert]::ToBase64String(
+    [Text.Encoding]::UTF8.GetBytes($router)
+)
+$payload = "NIKKIGO_ROUTER_ADDRESS_B64='$routerB64'`n$routerScript"
 $payloadB64 = [Convert]::ToBase64String(
     [Text.Encoding]::UTF8.GetBytes($payload)
 )
@@ -138,12 +128,14 @@ Write-Host '  Type the ROUTER password and press Enter.'
 Write-Host '  Nothing will appear while you type: no dots and no stars.'
 Write-Host '  This is normal. The keyboard is still working.'
 Write-Host ''
+Write-Host 'After login, the router will offer install, update, or removal.' -ForegroundColor Cyan
 Write-Host 'Waiting for SSH...' -ForegroundColor Green
-$payloadB64 | & ssh -T -p $sshPort "$sshUser@$router" "tr -d '\r\n' | base64 -d | ash"
+$remoteCommand = "printf '%s' '$payloadB64' | base64 -d | ash"
+& ssh -tt -p $sshPort "$sshUser@$router" $remoteCommand
 $payloadB64 = $null
 if ($LASTEXITCODE -ne 0) {
     Stop-WithError "Installation failed with exit code $LASTEXITCODE."
 }
 
 Write-Host ''
-Write-Host 'SUCCESS: NikkiOpen is configured and running.' -ForegroundColor Green
+Write-Host 'NikkiGo finished. Review the result above.' -ForegroundColor Green
