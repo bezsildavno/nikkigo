@@ -78,6 +78,11 @@ grep -q '\[ "$tested" -lt 8 \]' "$ROOT/router-safety.sh" &&
 	fail 'bounded proxy recovery'
 pass 'bounded proxy recovery'
 
+grep -q 'Оставшиеся группы будут проверены функционально' "$ROOT/router-safety.sh" &&
+	! grep -q '\[ "$selector_count" = "$choice_count" \]' "$ROOT/router-safety.sh" ||
+	fail 'partial selector preparation is allowed'
+pass 'partial selector preparation is allowed'
+
 redacted="$(
 	printf '%s\n' 'url=https://example.com/private?token=abc password=hunter2 secret=xyz' |
 		(

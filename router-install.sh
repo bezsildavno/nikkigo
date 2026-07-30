@@ -411,12 +411,12 @@ CURRENT_STAGE='подготовка панели Zashboard'
 if ensure_zashboard; then
 	say "Панель Zashboard подготовлена: /etc/nikki/run/ui/index.html"
 else
-	say "Предупреждение: Zashboard подготовить не удалось; это не влияет на обычный интернет."
+	say "Zashboard пока не загружен; повторная попытка будет после проверки интернета."
 fi
 
 CURRENT_STAGE='безопасный выбор прокси'
 select_safe_proxies ||
-	fail "не удалось безопасно подготовить proxy-group; перехват трафика не включён"
+	say "Предварительный выбор proxy-group не выполнен; будет использована функциональная проверка."
 
 CURRENT_STAGE='включение перехвата и проверка интернета'
 say "Включение NikkiOpen и проверка DNS/HTTPS"
@@ -431,6 +431,12 @@ if ! health_check; then
 	fi
 fi
 say "NikkiOpen успешно запущен; DNS и HTTPS работают."
+CURRENT_STAGE='повторная подготовка панели Zashboard'
+if ensure_zashboard; then
+	say "Панель Zashboard подготовлена: /etc/nikki/run/ui/index.html"
+else
+	say "Предупреждение: Zashboard загрузить не удалось; это не влияет на обычный интернет."
+fi
 if curl -fsS --max-time 5 "$(controller_url)/ui/" >/dev/null 2>&1; then
 	say "Zashboard отвечает через локальный controller."
 else

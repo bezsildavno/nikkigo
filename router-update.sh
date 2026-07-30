@@ -46,11 +46,9 @@ validate_profile /etc/nikki/run/config.yaml || {
 	reason='ошибка синтаксиса или запуска ядра'
 	rollback
 }
-select_safe_proxies || {
-	reason='не найден безопасный первоначальный выбор proxy-group'
-	rollback
-}
-ensure_zashboard || safe_log 'Предупреждение: Zashboard не подготовлен'
+select_safe_proxies ||
+	safe_log 'Предварительный выбор proxy-group не выполнен; будет использован health-check.'
+ensure_zashboard || safe_log 'Zashboard будет повторно загружен после проверки интернета.'
 uci -q set nikki.proxy.enabled='1'
 uci -q commit nikki
 /etc/init.d/nikki restart
@@ -61,5 +59,6 @@ if ! health_check; then
 		rollback
 	}
 fi
+ensure_zashboard || safe_log 'Предупреждение: Zashboard не подготовлен.'
 commit_state
 safe_log 'Подписка обновлена, функциональная проверка пройдена.'

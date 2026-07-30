@@ -157,7 +157,10 @@ select_safe_proxies() {
 			map(select(. == "DIRECT"))[0] // "")] | @tsv' \
 		"$NIKKIGO_STATE_DIR/proxies.json" > "$NIKKIGO_STATE_DIR/selections.tsv" 2>/dev/null || return 1
 	choice_count="$(awk -F '\t' '$2 != "" { count++ } END { print count + 0 }' "$NIKKIGO_STATE_DIR/selections.tsv")"
-	[ "$selector_count" = "$choice_count" ] || return 1
+	if [ "$choice_count" -lt "$selector_count" ]; then
+		safe_log "Не для всех selector-групп найден предварительный автоматический вариант."
+		safe_log "Оставшиеся группы будут проверены функционально после запуска."
+	fi
 	while IFS="$(printf '\t')" read -r group choice; do
 		[ -n "$group" ] && [ -n "$choice" ] || continue
 		api_select "$api" "$group" "$choice" || return 1
