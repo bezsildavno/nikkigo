@@ -62,6 +62,13 @@ If these checks fail, Nikki is stopped normally, its interception rules are
 removed, and the previous working state is restored. The router is never
 rebooted.
 
+Before rollback, NikkiGo asks the local Mihomo API to test up to eight
+subscription options. Names, countries, emojis, and proxy protocols are not
+hard-coded. Each candidate gets a four-second delay test followed by a real
+DNS and HTTPS check. If none works, a fresh installation leaves Nikki
+disabled; an update restores the previous state only when that state passed
+its own health check.
+
 ## Zashboard
 
 The dashboard archive is downloaded to a temporary staging directory.

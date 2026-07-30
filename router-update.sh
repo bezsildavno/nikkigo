@@ -51,9 +51,12 @@ ensure_zashboard || safe_log 'Предупреждение: Zashboard не по�
 uci -q set nikki.proxy.enabled='1'
 uci -q commit nikki
 /etc/init.d/nikki restart
-health_check || {
-	reason='не прошла проверка службы, API, DNS или HTTPS'
-	rollback
-}
+if ! health_check; then
+	safe_log 'Основная проверка не пройдена; проверяются альтернативные варианты.'
+	try_recover_proxies || {
+		reason='ни один из проверенных вариантов не восстановил DNS/HTTPS'
+		rollback
+	}
+fi
 commit_state
 safe_log 'Подписка обновлена, функциональная проверка пройдена.'

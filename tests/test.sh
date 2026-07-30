@@ -38,6 +38,12 @@ grep -q 'DIRECT' "$ROOT/tests/fixtures/success.yaml" ||
 pass 'profile fixtures'
 
 grep -q 'restore_state' "$ROOT/router-update.sh" &&
-	grep -q 'health_check' "$ROOT/router-update.sh" ||
+	grep -q 'health_check' "$ROOT/router-update.sh" &&
+	grep -q 'try_recover_proxies' "$ROOT/router-update.sh" ||
 	fail 'transactional updater wiring'
 pass 'transactional updater wiring'
+
+grep -q '\[ "$tested" -lt 8 \]' "$ROOT/router-safety.sh" &&
+	grep -q 'timeout=4000' "$ROOT/router-safety.sh" ||
+	fail 'bounded proxy recovery'
+pass 'bounded proxy recovery'

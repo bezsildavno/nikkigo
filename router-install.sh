@@ -357,7 +357,11 @@ uci -q set nikki.proxy.enabled='1'
 uci -q commit nikki
 /etc/init.d/nikki restart
 if ! health_check; then
-	fail "проверка DNS или HTTPS не пройдена; выполняется rollback"
+	say "Основная проверка интернета не пройдена."
+	say "Проверка до 8 альтернативных вариантов из подписки..."
+	if ! try_recover_proxies; then
+		fail "ни один проверенный вариант не восстановил DNS/HTTPS; выполняется rollback"
+	fi
 fi
 say "NikkiOpen успешно запущен; DNS и HTTPS работают."
 if curl -fsS --max-time 5 "$(controller_url)/ui/" >/dev/null 2>&1; then
