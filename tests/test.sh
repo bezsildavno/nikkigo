@@ -158,3 +158,8 @@ grep -q 'Операция отменена. Изменения не внесен
 	grep -q "'1337'.*||" "$ROOT/router-install.sh" ||
 	fail 'confirmation refusal exits cleanly'
 pass 'confirmation refusal exits cleanly'
+
+grep -q 'nikki restart >"$service_output" 2>&1' "$ROOT/router-install.sh" &&
+	grep -q 'Ответ службы:' "$ROOT/router-install.sh" ||
+	fail 'service restart output handling'
+pass 'service restart output handling'

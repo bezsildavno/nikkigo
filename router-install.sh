@@ -487,8 +487,18 @@ set nikki.config.enabled='1'
 set nikki.proxy.enabled='0'
 commit nikki
 EOF
-/etc/init.d/nikki enable
-/etc/init.d/nikki restart
+service_output="$NIKKIGO_STATE_DIR/nikki-service.log"
+if ! /etc/init.d/nikki enable >"$service_output" 2>&1; then
+	say "Не удалось включить автозапуск службы nikki. Ответ службы:"
+	redact_stream <"$service_output" | sed 's/^/[NikkiGo]   /'
+	fail "служба Taproom Nikki не включилась; будет выполнен rollback"
+fi
+if ! /etc/init.d/nikki restart >"$service_output" 2>&1; then
+	say "Не удалось запустить службу nikki. Ответ службы:"
+	redact_stream <"$service_output" | sed 's/^/[NikkiGo]   /'
+	fail "служба Taproom Nikki не перезапустилась; будет выполнен rollback"
+fi
+rm -f "$service_output"
 sleep 3
 
 /etc/init.d/nikki running >/dev/null 2>&1 ||
@@ -511,7 +521,13 @@ CURRENT_STAGE='включение перехвата и проверка инт�
 say "Включение Taproom Nikki и проверка DNS/HTTPS"
 uci -q set nikki.proxy.enabled='1'
 uci -q commit nikki
-/etc/init.d/nikki restart
+service_output="$NIKKIGO_STATE_DIR/nikki-service.log"
+if ! /etc/init.d/nikki restart >"$service_output" 2>&1; then
+	say "Не удалось перезапустить службу nikki после включения перехвата. Ответ службы:"
+	redact_stream <"$service_output" | sed 's/^/[NikkiGo]   /'
+	fail "служба Taproom Nikki не перезапустилась; будет выполнен rollback"
+fi
+rm -f "$service_output"
 if ! health_check; then
 	say "Основная проверка интернета не пройдена."
 	say "Проверка до 8 альтернативных вариантов из подписки..."
