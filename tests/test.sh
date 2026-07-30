@@ -148,3 +148,9 @@ grep -q 'trap cancel_remote INT TERM' "$ROOT/router-install.sh" &&
 	grep -q "existing_support_host.*sub.csm.transib.services" "$ROOT/router-install.sh" ||
 	fail 'clean cancellation and existing-provider detection'
 pass 'clean cancellation and existing-provider detection'
+
+grep -q 'Операция отменена. Изменения не внесены.' "$ROOT/router-install.sh" &&
+	grep -q "'322'.*||" "$ROOT/router-install.sh" &&
+	grep -q "'1337'.*||" "$ROOT/router-install.sh" ||
+	fail 'confirmation refusal exits cleanly'
+pass 'confirmation refusal exits cleanly'

@@ -127,6 +127,13 @@ cancel_remote() {
 	exit 0
 }
 
+cancel_before_changes() {
+	printf '\n%s[NikkiGo] Операция отменена. Изменения не внесены.%s\n' \
+		"$C_YELLOW" "$C_RESET"
+	trap - EXIT INT TERM
+	exit 0
+}
+
 read_remote_input() {
 	prompt="$1"
 	printf '\n'
@@ -264,14 +271,14 @@ if [ "$action" != 'remove' ]; then
 	say "Перед продолжением убедитесь, что у вас есть резервная копия и доступ к роутеру."
 	read_remote_input "Для подтверждения ответственности введите 322"
 	[ "$REPLY" = '322' ] ||
-		fail "условия не подтверждены; изменения не внесены"
+		cancel_before_changes
 fi
 
 if [ "$action" = 'remove' ]; then
 	say "ВНИМАНИЕ: будут удалены NikkiOpen, подписки, настройки и логи."
 	read_remote_input "Для подтверждения введите 1337"
 	[ "$REPLY" = '1337' ] ||
-		fail "удаление не подтверждено; изменения не внесены"
+		cancel_before_changes
 	CURRENT_STAGE='удаление NikkiOpen'
 	sed -i '/# nikkigo-update$/d' /etc/crontabs/root 2>/dev/null || true
 	/etc/init.d/cron restart 2>/dev/null || true
