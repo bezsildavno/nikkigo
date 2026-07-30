@@ -141,6 +141,10 @@ pass 'LuCI RPC backend registration'
 grep -q 'предоставляется «как есть»' "$ROOT/router-install.sh" &&
 	grep -q 'Для подтверждения ответственности введите 322' "$ROOT/router-install.sh" ||
 	fail 'explicit risk acknowledgement'
+consent_line="$(grep -n "Для подтверждения ответственности введите 322" "$ROOT/router-install.sh" | head -n 1 | cut -d: -f1)"
+compatibility_line="$(grep -n "проверка прав и совместимости роутера" "$ROOT/router-install.sh" | head -n 1 | cut -d: -f1)"
+[ "$consent_line" -lt "$compatibility_line" ] ||
+	fail 'risk acknowledgement must be first'
 pass 'explicit risk acknowledgement'
 
 grep -q 'trap cancel_remote INT TERM' "$ROOT/router-install.sh" &&
