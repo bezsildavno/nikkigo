@@ -142,3 +142,9 @@ grep -q 'предоставляется «как есть»' "$ROOT/router-insta
 	grep -q 'Для подтверждения ответственности введите 322' "$ROOT/router-install.sh" ||
 	fail 'explicit risk acknowledgement'
 pass 'explicit risk acknowledgement'
+
+grep -q 'trap cancel_remote INT TERM' "$ROOT/router-install.sh" &&
+	grep -q 'exit 0' "$ROOT/router-install.sh" &&
+	grep -q "existing_support_host.*sub.csm.transib.services" "$ROOT/router-install.sh" ||
+	fail 'clean cancellation and existing-provider detection'
+pass 'clean cancellation and existing-provider detection'

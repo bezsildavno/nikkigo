@@ -112,6 +112,21 @@ restore_remote_terminal() {
 	fi
 }
 
+cancel_remote() {
+	restore_remote_terminal
+	trap - INT TERM
+	if [ "${NIKKIGO_TRANSACTION:-0}" = '1' ]; then
+		restore_state
+		printf '\n%s[NikkiGo] Отменено пользователем. Безопасное состояние восстановлено.%s\n' \
+			"$C_YELLOW" "$C_RESET"
+	else
+		printf '\n%s[NikkiGo] Отменено пользователем. Изменения не выполнялись.%s\n' \
+			"$C_YELLOW" "$C_RESET"
+	fi
+	trap - EXIT
+	exit 0
+}
+
 read_remote_input() {
 	prompt="$1"
 	printf '\n'
@@ -134,13 +149,10 @@ read_remote_input() {
 		[ -n "$code" ] || continue
 		case "$code" in
 			27)
-				restore_remote_terminal
-				printf '\n[NikkiGo] Отменено пользователем.\n'
-				exit 0
+				cancel_remote
 				;;
 			3)
-				restore_remote_terminal
-				exit 130
+				cancel_remote
 				;;
 			10|13) break ;;
 			8|127)
@@ -182,7 +194,7 @@ finish() {
 	exit "$status"
 }
 trap finish EXIT
-trap 'exit 130' INT TERM
+trap cancel_remote INT TERM
 
 say "Устанавливается NikkiOpen из официального репозитория форка:"
 say "$UPSTREAM_REPOSITORY"
@@ -204,6 +216,16 @@ router_address="$(
 		base64 -d 2>/dev/null
 )" || fail "не удалось прочитать адрес роутера"
 unset NIKKIGO_ROUTER_ADDRESS_B64
+
+existing_support_url="$(uci -q get nikki.ssh_transibservice.url 2>/dev/null || :)"
+existing_support_host="${existing_support_url#*://}"
+existing_support_host="${existing_support_host%%/*}"
+existing_support_host="${existing_support_host%%\?*}"
+existing_support_host="${existing_support_host%%\#*}"
+if [ "$existing_support_host" = 'sub.csm.transib.services' ]; then
+	SUPPORT_MODE='transib'
+fi
+unset existing_support_url existing_support_host
 
 CURRENT_STAGE='проверка доступа к GitHub'
 say "Проверка соединения с GitHub"
@@ -236,6 +258,7 @@ else
 fi
 
 if [ "$action" != 'remove' ]; then
+	CURRENT_STAGE='подтверждение ответственности пользователем'
 	say "ВНИМАНИЕ: изменение программного обеспечения роутера выполняется на ваш страх и риск."
 	say "NikkiGo предоставляется «как есть», без гарантий."
 	say "Перед продолжением убедитесь, что у вас есть резервная копия и доступ к роутеру."

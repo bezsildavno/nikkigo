@@ -152,7 +152,7 @@ $remoteCommand = $remoteCommand.Replace('__ROUTER_B64__', $routerB64)
 & ssh -tt -p $sshPort "$sshUser@$router" $remoteCommand
 $sshExitCode = $LASTEXITCODE
 if ($sshExitCode -eq -1 -or $sshExitCode -eq 255) {
-    Stop-WithError 'SSH connection failed or was closed by the router. Check the address, SSH service, login, password, and router system log.'
+    Stop-WithError 'SSH was interrupted or could not connect. If you pressed Ctrl+C or Esc, setup was cancelled; otherwise check the address, SSH service, login, password, and router log.'
 }
 if ($sshExitCode -eq 90) {
     Stop-WithError 'The router could not decode the download address.'

@@ -152,7 +152,7 @@ $remoteCommand = $remoteCommand.Replace('__ROUTER_B64__', $routerB64)
 & ssh -tt -p $sshPort "$sshUser@$router" $remoteCommand
 $sshExitCode = $LASTEXITCODE
 if ($sshExitCode -eq -1 -or $sshExitCode -eq 255) {
-    Stop-WithError 'SSH-подключение не установлено или закрыто роутером. Проверьте адрес, службу SSH, логин, пароль и системный журнал роутера.'
+    Stop-WithError 'SSH-подключение прервано или не установлено. Если вы нажали Ctrl+C или Esc, установка отменена; иначе проверьте адрес, SSH, логин, пароль и журнал роутера.'
 }
 if ($sshExitCode -eq 90) {
     Stop-WithError 'Роутер не смог прочитать адрес загрузки.'
