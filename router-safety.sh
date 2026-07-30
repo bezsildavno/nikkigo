@@ -115,9 +115,23 @@ controller_url() {
 	printf 'http://127.0.0.1:%s' "$port"
 }
 
-url_encode() {
-	printf '%s' "$1" | od -An -tx1 | tr -d '\n ' | sed 's/../%&/g'
-}
+url_encode() (
+	# Work byte-by-byte in the C locale. This avoids optional OpenWrt tools
+	# such as od, hexdump, xxd, Python, or Perl.
+	LC_ALL=C
+	export LC_ALL
+	value="$1"
+	encoded=
+	while [ -n "$value" ]; do
+		rest="${value#?}"
+		byte="${value%"$rest"}"
+		decimal="$(printf '%d' "'$byte")"
+		hex="$(printf '%02X' "$decimal")"
+		encoded="${encoded}%${hex}"
+		value="$rest"
+	done
+	printf '%s' "$encoded"
+)
 
 api_get() {
 	url="$1"

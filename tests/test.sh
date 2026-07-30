@@ -83,6 +83,16 @@ grep -q 'recovery-first-round.tsv' "$ROOT/router-safety.sh" &&
 	fail 'round-robin proxy recovery diagnostics'
 pass 'round-robin proxy recovery diagnostics'
 
+encoded="$(
+	. "$ROOT/router-safety.sh"
+	url_encode 'Тест 🌍'
+)"
+[ "$encoded" = '%D0%A2%D0%B5%D1%81%D1%82%20%F0%9F%8C%8D' ] ||
+	fail 'BusyBox-only UTF-8 URL encoding'
+! grep -q 'od -An' "$ROOT/router-safety.sh" ||
+	fail 'URL encoding must not depend on od'
+pass 'BusyBox-only UTF-8 URL encoding'
+
 grep -q 'Оставшиеся группы будут проверены функционально' "$ROOT/router-safety.sh" &&
 	! grep -q '\[ "$selector_count" = "$choice_count" \]' "$ROOT/router-safety.sh" ||
 	fail 'partial selector preparation is allowed'
