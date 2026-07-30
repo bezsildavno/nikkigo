@@ -21,4 +21,5 @@ $installerName = if ($language -eq 'ru') {
 }
 
 $installer = (Invoke-WebRequest -UseBasicParsing "$BaseUrl/$installerName").Content
+$installer = $installer.TrimStart([char]0xFEFF)
 Invoke-Expression $installer
