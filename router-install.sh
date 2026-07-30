@@ -203,7 +203,8 @@ say "NikkiGo включит автоматическое обновление п
 
 CURRENT_STAGE='ввод ссылки подписки'
 if uci -q get nikki.ssh_transibservice >/dev/null 2>&1; then
-	say "Подписка SSH_TransibService уже существует."
+	existing_name="$(uci -q get nikki.ssh_transibservice.name || true)"
+	say "Подписка ${existing_name:-ssh_transibservice} уже существует."
 	say "Новая копия создана не будет; существующая подписка будет обновлена."
 fi
 read_remote_input "Вставьте ссылку подписки"
@@ -220,6 +221,14 @@ sanitized_url="$(printf '%s' "$subscription_url" | tr -d '\r\n')"
 [ "$sanitized_url" = "$subscription_url" ] ||
 	fail "ссылка содержит перенос строки"
 unset sanitized_url
+
+subscription_name="${subscription_url#*://}"
+subscription_name="${subscription_name%%/*}"
+subscription_name="${subscription_name%%\?*}"
+subscription_name="${subscription_name%%\#*}"
+[ -n "$subscription_name" ] ||
+	fail "не удалось определить имя подписки из ссылки"
+say "Имя подписки определено из ссылки: $subscription_name"
 
 existing_url="$(uci -q get nikki.ssh_transibservice.url || true)"
 if [ -n "$existing_url" ]; then
@@ -251,7 +260,7 @@ fi
 
 uci -q batch <<EOF
 set nikki.ssh_transibservice=subscription
-set nikki.ssh_transibservice.name='SSH_TransibService'
+set nikki.ssh_transibservice.name='$subscription_name'
 set nikki.ssh_transibservice.url='$subscription_url'
 set nikki.ssh_transibservice.user_agent='Clash.Meta'
 set nikki.ssh_transibservice.prefer='remote'
@@ -299,7 +308,7 @@ echo '0 5 * * * /etc/init.d/nikki update_subscription ssh_transibservice; [ "$(u
 
 expire_at="$(uci -q get nikki.ssh_transibservice.expire || true)"
 updated_at="$(uci -q get nikki.ssh_transibservice.update || true)"
-say "Подписка SSH_TransibService успешно загружена."
+say "Подписка $subscription_name успешно загружена."
 if [ -n "$updated_at" ]; then
 	say "Последнее обновление: $updated_at"
 fi
