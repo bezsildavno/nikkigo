@@ -85,8 +85,9 @@ NikkiGo supports archives containing either a root `index.html` or
 `/etc/nikki/run/ui/index.html`.
 
 To open the controls, sign in to the router's regular web interface and go to
-`Services → Nikki`. Sign out and back in after installation because restarting
-`rpcd` may invalidate the previous LuCI session.
+`Services → Nikki`, then click `Open Panel`. Sign out and back in after
+installation because restarting `rpcd` may invalidate the previous LuCI
+session.
 
 Zashboard failure is reported separately and does not by itself disable
 normal internet access.

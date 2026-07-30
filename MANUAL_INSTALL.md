@@ -107,7 +107,7 @@ ubus -S list luci.nikki
 ## 5. Add the subscription
 
 Open the router's regular web interface, sign in to LuCI again after the
-`rpcd` restart, and go to `Services → Nikki`.
+`rpcd` restart, go to `Services → Nikki`, and click `Open Panel`.
 
 Create a subscription in the profiles/subscriptions page:
 
