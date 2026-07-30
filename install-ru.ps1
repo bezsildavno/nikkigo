@@ -104,15 +104,12 @@ if ($sshPort -notmatch '^\d{1,5}$' -or [int]$sshPort -gt 65535) {
     Stop-WithError 'Указан некорректный порт SSH.'
 }
 
-$routerScript = (Invoke-WebRequest -UseBasicParsing "$BaseUrl/router-install.sh").Content
 $routerB64 = [Convert]::ToBase64String(
     [Text.Encoding]::UTF8.GetBytes($router)
 )
-$payload = "NIKKIGO_ROUTER_ADDRESS_B64='$routerB64'`n$routerScript"
-$payloadB64 = [Convert]::ToBase64String(
-    [Text.Encoding]::UTF8.GetBytes($payload)
+$baseUrlB64 = [Convert]::ToBase64String(
+    [Text.Encoding]::UTF8.GetBytes($BaseUrl)
 )
-$payload = $null
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
@@ -130,11 +127,35 @@ Write-Host '  Это нормально: клавиатура работает, 
 Write-Host ''
 Write-Host 'После входа роутер предложит установку, обновление или удаление.' -ForegroundColor Cyan
 Write-Host 'Ожидание SSH...' -ForegroundColor Green
-$remoteCommand = "printf '%s' '$payloadB64' | base64 -d | ash"
+$remoteCommand = @'
+base_url=$(printf '%s' '__BASE_URL_B64__' | base64 -d) || exit 90
+tmp="/tmp/nikkigo-$$.sh"
+echo "[NikkiGo] SSH-подключение установлено. Скачивание сценария обслуживания..."
+if ! wget -O "$tmp" "$base_url/router-install.sh"; then
+    echo "[NikkiGo] ОШИБКА: не удалось скачать router-install.sh" >&2
+    rm -f "$tmp"
+    exit 91
+fi
+NIKKIGO_ROUTER_ADDRESS_B64='__ROUTER_B64__' ash "$tmp"
+status=$?
+rm -f "$tmp"
+exit "$status"
+'@
+$remoteCommand = $remoteCommand.Replace('__BASE_URL_B64__', $baseUrlB64)
+$remoteCommand = $remoteCommand.Replace('__ROUTER_B64__', $routerB64)
 & ssh -tt -p $sshPort "$sshUser@$router" $remoteCommand
-$payloadB64 = $null
-if ($LASTEXITCODE -ne 0) {
-    Stop-WithError "Установка завершилась с кодом ошибки $LASTEXITCODE."
+$sshExitCode = $LASTEXITCODE
+if ($sshExitCode -eq -1 -or $sshExitCode -eq 255) {
+    Stop-WithError 'SSH-подключение не установлено или закрыто роутером. Проверьте адрес, службу SSH, логин, пароль и системный журнал роутера.'
+}
+if ($sshExitCode -eq 90) {
+    Stop-WithError 'Роутер не смог прочитать адрес загрузки.'
+}
+if ($sshExitCode -eq 91) {
+    Stop-WithError 'Роутер не смог скачать сценарий NikkiGo. Проверьте интернет, DNS и системное время на роутере.'
+}
+if ($sshExitCode -ne 0) {
+    Stop-WithError "NikkiGo завершился на роутере с кодом $sshExitCode. Подробности показаны выше."
 }
 
 Write-Host ''

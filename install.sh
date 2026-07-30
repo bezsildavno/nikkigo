@@ -116,16 +116,6 @@ default_gateway() {
 	esac
 }
 
-download() {
-	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL "$1"
-	elif command -v wget >/dev/null 2>&1; then
-		wget -qO- "$1"
-	else
-		fail "нужен curl или wget"
-	fi
-}
-
 gateway="$(default_gateway || true)"
 [ -n "$gateway" ] || gateway="192.168.1.1"
 
@@ -178,15 +168,22 @@ read_input "Нажмите Enter для 22 или введите другой п
 ssh_port="$REPLY"
 ssh_port="${ssh_port:-22}"
 
-payload_b64="$(
-	{
-		router_b64="$(printf '%s' "$router" | base64 | tr -d '\r\n')"
-		printf "NIKKIGO_ROUTER_ADDRESS_B64='%s'\n" "$router_b64"
-		download "$BASE_URL/router-install.sh"
-	} |
-		base64 |
-		tr -d '\r\n'
-)"
+router_b64="$(printf '%s' "$router" | base64 | tr -d '\r\n')"
+base_url_b64="$(printf '%s' "$BASE_URL" | base64 | tr -d '\r\n')"
+remote_command="
+base_url=\$(printf '%s' '$base_url_b64' | base64 -d) || exit 90
+tmp=\"/tmp/nikkigo-\$\$.sh\"
+echo '[NikkiGo] SSH-подключение установлено. Скачивание сценария обслуживания...'
+if ! wget -O \"\$tmp\" \"\$base_url/router-install.sh\"; then
+	echo '[NikkiGo] ОШИБКА: не удалось скачать router-install.sh' >&2
+	rm -f \"\$tmp\"
+	exit 91
+fi
+NIKKIGO_ROUTER_ADDRESS_B64='$router_b64' ash \"\$tmp\"
+status=\$?
+rm -f \"\$tmp\"
+exit \"\$status\"
+"
 
 say ""
 say "============================================================"
@@ -204,9 +201,20 @@ say "  Это нормально: клавиатура работает, пар�
 say ""
 say "После входа роутер предложит установку, обновление или удаление."
 say "Ожидание SSH..."
-ssh -tt -p "$ssh_port" "$ssh_user@$router" \
-	"printf '%s' '$payload_b64' | base64 -d | ash"
-unset payload_b64
+if ssh -tt -p "$ssh_port" "$ssh_user@$router" "$remote_command"; then
+	ssh_exit_code=0
+else
+	ssh_exit_code=$?
+fi
+unset remote_command router_b64 base_url_b64
+
+case "$ssh_exit_code" in
+	0) ;;
+	90) fail "роутер не смог прочитать адрес загрузки" ;;
+	91) fail "роутер не смог скачать сценарий NikkiGo; проверьте интернет, DNS и системное время" ;;
+	255) fail "SSH-подключение не установлено или закрыто роутером; проверьте адрес, SSH, логин, пароль и журнал роутера" ;;
+	*) fail "NikkiGo завершился на роутере с кодом $ssh_exit_code; подробности показаны выше" ;;
+esac
 
 say ""
 say "NikkiGo завершил работу. Результат показан выше."

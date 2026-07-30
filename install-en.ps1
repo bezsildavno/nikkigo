@@ -104,15 +104,12 @@ if ($sshPort -notmatch '^\d{1,5}$' -or [int]$sshPort -gt 65535) {
     Stop-WithError 'Invalid SSH port.'
 }
 
-$routerScript = (Invoke-WebRequest -UseBasicParsing "$BaseUrl/router-install.sh").Content
 $routerB64 = [Convert]::ToBase64String(
     [Text.Encoding]::UTF8.GetBytes($router)
 )
-$payload = "NIKKIGO_ROUTER_ADDRESS_B64='$routerB64'`n$routerScript"
-$payloadB64 = [Convert]::ToBase64String(
-    [Text.Encoding]::UTF8.GetBytes($payload)
+$baseUrlB64 = [Convert]::ToBase64String(
+    [Text.Encoding]::UTF8.GetBytes($BaseUrl)
 )
-$payload = $null
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
@@ -130,11 +127,35 @@ Write-Host '  This is normal. The keyboard is still working.'
 Write-Host ''
 Write-Host 'After login, the router will offer install, update, or removal.' -ForegroundColor Cyan
 Write-Host 'Waiting for SSH...' -ForegroundColor Green
-$remoteCommand = "printf '%s' '$payloadB64' | base64 -d | ash"
+$remoteCommand = @'
+base_url=$(printf '%s' '__BASE_URL_B64__' | base64 -d) || exit 90
+tmp="/tmp/nikkigo-$$.sh"
+echo "[NikkiGo] SSH connection established. Downloading the maintenance script..."
+if ! wget -O "$tmp" "$base_url/router-install.sh"; then
+    echo "[NikkiGo] ERROR: failed to download router-install.sh" >&2
+    rm -f "$tmp"
+    exit 91
+fi
+NIKKIGO_ROUTER_ADDRESS_B64='__ROUTER_B64__' ash "$tmp"
+status=$?
+rm -f "$tmp"
+exit "$status"
+'@
+$remoteCommand = $remoteCommand.Replace('__BASE_URL_B64__', $baseUrlB64)
+$remoteCommand = $remoteCommand.Replace('__ROUTER_B64__', $routerB64)
 & ssh -tt -p $sshPort "$sshUser@$router" $remoteCommand
-$payloadB64 = $null
-if ($LASTEXITCODE -ne 0) {
-    Stop-WithError "Installation failed with exit code $LASTEXITCODE."
+$sshExitCode = $LASTEXITCODE
+if ($sshExitCode -eq -1 -or $sshExitCode -eq 255) {
+    Stop-WithError 'SSH connection failed or was closed by the router. Check the address, SSH service, login, password, and router system log.'
+}
+if ($sshExitCode -eq 90) {
+    Stop-WithError 'The router could not decode the download address.'
+}
+if ($sshExitCode -eq 91) {
+    Stop-WithError 'The router could not download the NikkiGo maintenance script. Check internet, DNS, and system time on the router.'
+}
+if ($sshExitCode -ne 0) {
+    Stop-WithError "NikkiGo failed on the router with exit code $sshExitCode. See the detailed messages above."
 }
 
 Write-Host ''
