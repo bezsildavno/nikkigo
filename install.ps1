@@ -68,6 +68,10 @@ $subscription = $null
 
 $routerScript = (Invoke-WebRequest -UseBasicParsing "$BaseUrl/router-install.sh").Content
 $payload = "NIKKIGO_SUBSCRIPTION_B64='$subscriptionB64'`n$routerScript"
+$payloadB64 = [Convert]::ToBase64String(
+    [Text.Encoding]::UTF8.GetBytes($payload)
+)
+$payload = $null
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
@@ -84,7 +88,8 @@ Write-Host '  Nothing will appear while you type: no dots and no stars.'
 Write-Host '  This is normal. The keyboard is still working.'
 Write-Host ''
 Write-Host 'Waiting for SSH...' -ForegroundColor Green
-$payload | & ssh -tt -p $sshPort "$sshUser@$router" 'ash -s'
+$payloadB64 | & ssh -T -p $sshPort "$sshUser@$router" 'base64 -d | ash'
+$payloadB64 = $null
 if ($LASTEXITCODE -ne 0) {
     Stop-WithError "Installation failed with exit code $LASTEXITCODE."
 }

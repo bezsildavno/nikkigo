@@ -93,6 +93,16 @@ subscription_b64="$(
 )"
 unset subscription
 
+payload_b64="$(
+	{
+		printf "NIKKIGO_SUBSCRIPTION_B64='%s'\n" "$subscription_b64"
+		download "$BASE_URL/router-install.sh"
+	} |
+		base64 |
+		tr -d '\r\n'
+)"
+unset subscription_b64
+
 say ""
 say "============================================================"
 say " ДАЛЬШЕ: вход по SSH"
@@ -108,10 +118,9 @@ say "  Во время ввода не будет видно ничего — н
 say "  Это нормально: клавиатура работает, пароль вводится."
 say ""
 say "Ожидание SSH..."
-{
-	printf "NIKKIGO_SUBSCRIPTION_B64='%s'\n" "$subscription_b64"
-	download "$BASE_URL/router-install.sh"
-} | ssh -tt -p "$ssh_port" "$ssh_user@$router" "ash -s"
+printf '%s\n' "$payload_b64" |
+	ssh -T -p "$ssh_port" "$ssh_user@$router" "base64 -d | ash"
+unset payload_b64
 
 say ""
 say "УСПЕШНО: Nikki настроен и запущен."
