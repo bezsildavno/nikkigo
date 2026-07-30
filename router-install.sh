@@ -309,6 +309,32 @@ fi
 
 [ -x /etc/init.d/nikki ] || fail "NikkiOpen не установился"
 
+CURRENT_STAGE='регистрация панели NikkiOpen в LuCI'
+say "Регистрация панели NikkiOpen в LuCI"
+rm -f /tmp/luci-indexcache
+if [ -x /etc/init.d/rpcd ]; then
+	if /etc/init.d/rpcd restart; then
+		sleep 2
+	else
+		say "Предупреждение: не удалось перезапустить rpcd."
+	fi
+fi
+if [ -x /etc/init.d/uhttpd ]; then
+	if ! /etc/init.d/uhttpd reload >/dev/null 2>&1; then
+		/etc/init.d/uhttpd restart >/dev/null 2>&1 ||
+			say "Предупреждение: не удалось обновить uhttpd."
+	fi
+fi
+if command -v ubus >/dev/null 2>&1 &&
+	ubus -S list luci.nikki >/dev/null 2>&1; then
+	LUCI_BACKEND_READY=1
+	say "RPC-модуль панели NikkiOpen зарегистрирован."
+else
+	LUCI_BACKEND_READY=0
+	say "Предупреждение: LuCI пока не видит RPC-модуль luci.nikki."
+	say "Интернет и ядро Nikki от этого не зависят; после установки обновите страницу панели."
+fi
+
 if [ "${NIKKIGO_LANGUAGE:-ru}" = 'ru' ]; then
 	CURRENT_STAGE='установка русского языка NikkiOpen'
 	say "Установка русского языка панели NikkiOpen"
@@ -504,3 +530,7 @@ fi
 say "Панель управления NikkiOpen:"
 say "http://$router_address/cgi-bin/luci/admin/services/nikki"
 say "Если LuCI настроен на HTTPS, замените http:// на https://."
+if [ "${LUCI_BACKEND_READY:-0}" = '0' ]; then
+	say "Если страница показывает «No related RPC reply», обновите её через Ctrl+F5."
+	say "Если ошибка останется, выполните по SSH: /etc/init.d/rpcd restart"
+fi

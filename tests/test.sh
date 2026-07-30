@@ -132,3 +132,8 @@ grep -q "subscription_name.*sub.csm.transib.services" "$ROOT/router-install.sh" 
 	grep -q "SUPPORT_MODE='transib'" "$ROOT/router-install.sh" ||
 	fail 'provider-aware support routing'
 pass 'provider-aware support routing'
+
+grep -q '/etc/init.d/rpcd restart' "$ROOT/router-install.sh" &&
+	grep -q 'ubus -S list luci.nikki' "$ROOT/router-install.sh" ||
+	fail 'LuCI RPC backend registration'
+pass 'LuCI RPC backend registration'
