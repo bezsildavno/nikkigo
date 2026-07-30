@@ -256,7 +256,20 @@ if [ "$action" = 'update' ]; then
 else
 	say "Установка NikkiOpen из $UPSTREAM_REPOSITORY"
 fi
-if ! LUCI_I18N=1 wget -qO- "$UPSTREAM_INSTALLER" | ash; then
+if [ "${NIKKIGO_LANGUAGE:-ru}" = 'ru' ]; then
+	if wget -qO- "$UPSTREAM_INSTALLER" | LUCI_I18N=1 ash; then
+		upstream_status=0
+	else
+		upstream_status=$?
+	fi
+else
+	if wget -qO- "$UPSTREAM_INSTALLER" | ash; then
+		upstream_status=0
+	else
+		upstream_status=$?
+	fi
+fi
+if [ "$upstream_status" -ne 0 ]; then
 	say "Не удалось автоматически установить или обновить NikkiOpen."
 	say "Проверьте ошибки пакетного менеджера выше."
 	say "Основные зависимости: ca-bundle curl yq firewall4 ip-full"
@@ -271,14 +284,19 @@ if [ "${NIKKIGO_LANGUAGE:-ru}" = 'ru' ]; then
 	CURRENT_STAGE='установка русского языка NikkiOpen'
 	say "Установка русского языка панели NikkiOpen"
 	if [ -x /bin/opkg ]; then
-		if opkg install luci-i18n-nikki-ru; then
+		if opkg status luci-i18n-nikki-ru 2>/dev/null |
+			grep -q '^Status: .* installed'; then
+			say "Русский язык панели NikkiOpen установлен из официального архива."
+		elif opkg install luci-i18n-nikki-ru; then
 			say "Русский язык панели NikkiOpen установлен."
 		else
 			say "Предупреждение: пакет luci-i18n-nikki-ru недоступен для этой прошивки."
 			say "NikkiOpen установлен и продолжит работать с языком, доступным в LuCI."
 		fi
 	elif [ -x /usr/bin/apk ]; then
-		if apk add luci-i18n-nikki-ru; then
+		if apk info -e luci-i18n-nikki-ru >/dev/null 2>&1; then
+			say "Русский язык панели NikkiOpen установлен из официального архива."
+		elif apk add luci-i18n-nikki-ru; then
 			say "Русский язык панели NikkiOpen установлен."
 		else
 			say "Предупреждение: пакет luci-i18n-nikki-ru недоступен для этой прошивки."

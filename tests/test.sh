@@ -98,3 +98,7 @@ grep -q 'OpenWrt:' "$ROOT/router-install.sh" &&
 	grep -q 'Свободно в /overlay:' "$ROOT/router-install.sh" ||
 	fail 'technical diagnostic context'
 pass 'technical diagnostic context'
+
+grep -q 'wget -qO- "$UPSTREAM_INSTALLER" | LUCI_I18N=1 ash' "$ROOT/router-install.sh" ||
+	fail 'Russian package flag reaches upstream installer'
+pass 'Russian package flag reaches upstream installer'
