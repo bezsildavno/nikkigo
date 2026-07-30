@@ -1,0 +1,14 @@
+{
+  "name": "nikkigo-bootstrap",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Railway dispatcher for NikkiGo installers",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/server.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
