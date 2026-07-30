@@ -15,13 +15,6 @@ Prefer not to run an installer? See the
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.sh)"
 ```
 
-## Railway dispatcher
-
-This repository includes a dependency-free Node.js service ready for Railway.
-After deployment, the same domain provides `/install.ps1`, `/install.sh`,
-automatic `/install`, and `/health`. Set `GITHUB_REF` to pin a release;
-otherwise the service follows `main`. Installer responses disable caching.
-
 ## Windows PowerShell
 
 The language is selected automatically from the Windows locale:

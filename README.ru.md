@@ -15,14 +15,6 @@ OpenWrt через SSH.
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.sh)"
 ```
 
-## Диспетчер Railway
-
-В репозитории есть готовый Railway-сервис на Node.js без внешних зависимостей.
-После развёртывания доступны `/install.ps1`, `/install.sh`, автоматический
-`/install` и проверка `/health`. Переменная `GITHUB_REF` фиксирует нужный
-релиз; без неё сервис использует ветку `main`. Кэширование установщиков
-отключено.
-
 ## Windows PowerShell
 
 Язык определяется автоматически по настройкам Windows:
