@@ -77,3 +77,24 @@ grep -q '\[ "$tested" -lt 8 \]' "$ROOT/router-safety.sh" &&
 	grep -q 'timeout=4000' "$ROOT/router-safety.sh" ||
 	fail 'bounded proxy recovery'
 pass 'bounded proxy recovery'
+
+redacted="$(
+	printf '%s\n' 'url=https://example.com/private?token=abc password=hunter2 secret=xyz' |
+		(
+			. "$ROOT/router-safety.sh"
+			redact_stream
+		)
+)"
+printf '%s' "$redacted" | grep -q 'example.com' &&
+	fail 'diagnostic URL redaction'
+printf '%s' "$redacted" | grep -q 'hunter2' &&
+	fail 'diagnostic password redaction'
+printf '%s' "$redacted" | grep -q 'secret=xyz' &&
+	fail 'diagnostic secret redaction'
+pass 'diagnostic secret redaction'
+
+grep -q 'OpenWrt:' "$ROOT/router-install.sh" &&
+	grep -q 'Состояние службы:' "$ROOT/router-install.sh" &&
+	grep -q 'Свободно в /overlay:' "$ROOT/router-install.sh" ||
+	fail 'technical diagnostic context'
+pass 'technical diagnostic context'

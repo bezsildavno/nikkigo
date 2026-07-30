@@ -9,9 +9,18 @@ NIKKIGO_TRANSACTION=0
 
 safe_log() {
 	printf '[NikkiGo] %s\n' "$*" |
-		sed -E \
-			-e 's#https?://[^[:space:]]+#<URL скрыт>#g' \
-			-e 's#(password|secret|token|key|uuid)[=:][^[:space:]]+#\1=<скрыто>#Ig'
+		redact_stream
+}
+
+redact_stream() {
+	sed \
+		-e 's#http://[^[:space:]]*#<URL скрыт>#g' \
+		-e 's#https://[^[:space:]]*#<URL скрыт>#g' \
+		-e 's#[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][=:][^[:space:]]*#password=<скрыто>#g' \
+		-e 's#[Ss][Ee][Cc][Rr][Ee][Tt][=:][^[:space:]]*#secret=<скрыто>#g' \
+		-e 's#[Tt][Oo][Kk][Ee][Nn][=:][^[:space:]]*#token=<скрыто>#g' \
+		-e 's#[Kk][Ee][Yy][=:][^[:space:]]*#key=<скрыто>#g' \
+		-e 's#[Uu][Uu][Ii][Dd][=:][^[:space:]]*#uuid=<скрыто>#g'
 }
 
 backup_state() {

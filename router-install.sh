@@ -28,8 +28,51 @@ show_support() {
 
 fail() {
 	printf '[NikkiGo] Ошибка: %s\n' "$*" >&2
+	show_diagnostics 1 >&2
 	show_support >&2
 	exit 1
+}
+
+show_diagnostics() {
+	diagnostic_status="${1:-1}"
+	say "---------------- ДИАГНОСТИКА ----------------"
+	say "Этап: ${CURRENT_STAGE:-неизвестен}"
+	say "Код завершения: $diagnostic_status"
+	if [ -r /etc/openwrt_release ]; then
+		openwrt_version="$(sed -n "s/^DISTRIB_RELEASE='\(.*\)'/\1/p" /etc/openwrt_release | head -n 1)"
+		openwrt_target="$(sed -n "s/^DISTRIB_TARGET='\(.*\)'/\1/p" /etc/openwrt_release | head -n 1)"
+		say "OpenWrt: ${openwrt_version:-не определена}; target: ${openwrt_target:-не определён}"
+	fi
+	say "Ядро и архитектура: $(uname -r 2>/dev/null || printf '?') / $(uname -m 2>/dev/null || printf '?')"
+	if [ -x /bin/opkg ]; then
+		say "Менеджер пакетов: opkg"
+	elif [ -x /usr/bin/apk ]; then
+		say "Менеджер пакетов: apk"
+	else
+		say "Менеджер пакетов: не найден"
+	fi
+	[ -f /etc/config/nikki ] &&
+		say "Конфигурация Nikki: есть" ||
+		say "Конфигурация Nikki: ещё не создана"
+	[ -x /etc/init.d/nikki ] &&
+		say "Служба Nikki: установлена" ||
+		say "Служба Nikki: ещё не установлена"
+	if [ -x /etc/init.d/nikki ]; then
+		if /etc/init.d/nikki running >/dev/null 2>&1; then
+			say "Состояние службы: запущена"
+		else
+			say "Состояние службы: остановлена"
+		fi
+	fi
+	overlay_free="$(df -Pk /overlay 2>/dev/null | awk 'NR == 2 { print $4 }')"
+	[ -z "$overlay_free" ] || say "Свободно в /overlay: ${overlay_free} КБ"
+	for diagnostic_log in /var/log/nikki/app.log /var/log/nikki/core.log; do
+		[ -s "$diagnostic_log" ] || continue
+		say "Последние безопасные строки ${diagnostic_log}:"
+		tail -n 12 "$diagnostic_log" 2>/dev/null | redact_stream |
+			sed 's/^/[NikkiGo]   /'
+	done
+	say "-------------- КОНЕЦ ДИАГНОСТИКИ --------------"
 }
 
 REMOTE_TTY_STATE=
@@ -103,6 +146,7 @@ finish() {
 	cleanup
 	if [ "$status" -ne 0 ] && [ "$SUPPORT_SHOWN" -eq 0 ]; then
 		printf '[NikkiGo] Неожиданная ошибка на этапе: %s\n' "$CURRENT_STAGE" >&2
+		show_diagnostics "$status" >&2
 		show_support >&2
 	fi
 	trap - EXIT
