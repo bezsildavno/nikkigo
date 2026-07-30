@@ -6,6 +6,7 @@ BASE_URL="${NIKKIGO_BASE_URL:-https://raw.githubusercontent.com/$REPO_OWNER/nikk
 UPSTREAM_URL='https://github.com/lanetsky/nikkiopen'
 SUPPORT_BOT='@transib_service_gena_bot'
 SUPPORT_SHOWN=0
+REMOTE_DETAILS_SHOWN=0
 
 if [ -t 1 ] && [ "${TERM:-dumb}" != 'dumb' ]; then
 	C_RESET="$(printf '\033[0m')"
@@ -24,6 +25,9 @@ say() {
 fail() {
 	SUPPORT_SHOWN=1
 	printf '%sОшибка: %s%s\n' "$C_RED" "$*" "$C_RESET" >&2
+	if [ "$REMOTE_DETAILS_SHOWN" = '1' ]; then
+		exit 1
+	fi
 	printf 'Если нужна помощь, напишите в Telegram-бот: %s\n' "$SUPPORT_BOT" >&2
 	printf 'Пришлите скриншот окна от команды запуска до ошибки\n' >&2
 	printf 'или скопируйте и отправьте весь текст из консоли.\n' >&2
@@ -63,7 +67,7 @@ trap 'cancel_input 130' INT TERM HUP
 
 read_input() {
 	prompt="$1"
-	printf '\n%s>>> ТРЕБУЕТСЯ ДЕЙСТВИЕ <<<%s\n' "$C_YELLOW" "$C_RESET"
+	printf '\n'
 	printf '%s%s:%s ' "$C_YELLOW" "$prompt" "$C_RESET"
 
 	if [ ! -t 0 ]; then
@@ -230,7 +234,7 @@ case "$ssh_exit_code" in
 	90) fail "роутер не смог прочитать адрес загрузки" ;;
 	91) fail "роутер не смог скачать сценарий NikkiGo; проверьте интернет, DNS и системное время" ;;
 	255) fail "SSH-подключение не установлено или закрыто роутером; проверьте адрес, SSH, логин, пароль и журнал роутера" ;;
-	*) fail "NikkiGo завершился на роутере с кодом $ssh_exit_code; подробности показаны выше" ;;
+	*) REMOTE_DETAILS_SHOWN=1; fail "NikkiGo завершился на роутере с кодом $ssh_exit_code; подробности показаны выше" ;;
 esac
 
 say ""

@@ -45,6 +45,10 @@ try {
         [Console]::Error.WriteLine(
             ((ConvertFrom-NikkiGoBase64 '0J7RiNC40LHQutCwIE5pa2tpR286IHswfQ==') -f $_.Exception.Message)
         )
+        $remoteDetailsMarker = ConvertFrom-NikkiGoBase64 '0J/QvtC00YDQvtCx0L3QvtGB0YLQuCDQv9C+0LrQsNC30LDQvdGLINCy0YvRiNC1Lg=='
+        if ($_.Exception.Message -like "*$remoteDetailsMarker*") {
+            return
+        }
         Write-Host (
             (ConvertFrom-NikkiGoBase64 '0JXRgdC70Lgg0L3Rg9C20L3QsCDQv9C+0LzQvtGJ0YwsINC90LDQv9C40YjQuNGC0LUg0LIgVGVsZWdyYW0t0LHQvtGCOiB7MH0=') -f $SupportBot
         ) -ForegroundColor Yellow
@@ -56,6 +60,9 @@ try {
         ) -ForegroundColor Yellow
     } else {
         [Console]::Error.WriteLine("NikkiGo failed: $($_.Exception.Message)")
+        if ($_.Exception.Message -like '*detailed messages above.*') {
+            return
+        }
         Write-Host "Telegram support: $SupportBot" -ForegroundColor Yellow
         Write-Host 'Send a screenshot of this window from the launch command through the error,' -ForegroundColor Yellow
         Write-Host 'or copy and send the complete console text.' -ForegroundColor Yellow

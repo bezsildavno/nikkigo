@@ -6,6 +6,7 @@ UPSTREAM_UNINSTALLER='https://raw.githubusercontent.com/lanetsky/nikkiopen/main/
 UPSTREAM_REPOSITORY='https://github.com/lanetsky/nikkiopen'
 ZASHBOARD_REPOSITORY='https://github.com/Zephyruso/zashboard'
 SUPPORT_BOT='@transib_service_gena_bot'
+SUPPORT_MODE='provider'
 CURRENT_STAGE='запуск'
 SUPPORT_SHOWN=0
 
@@ -44,7 +45,11 @@ say() {
 
 show_support() {
 	SUPPORT_SHOWN=1
-	say "Если не получается исправить ошибку, напишите в Telegram-бот: $SUPPORT_BOT"
+	if [ "$SUPPORT_MODE" = 'transib' ]; then
+		say "Если не получается исправить ошибку, напишите в Telegram-бот: $SUPPORT_BOT"
+	else
+		say "Обратитесь в поддержку сервиса, у которого вы получили ссылку подписки."
+	fi
 	say "Пришлите скриншот текущего окна от команды запуска до ошибки"
 	say "или скопируйте и отправьте весь текст из консоли."
 }
@@ -109,7 +114,7 @@ restore_remote_terminal() {
 
 read_remote_input() {
 	prompt="$1"
-	printf '\n%s%s[NikkiGo] >>> ТРЕБУЕТСЯ ДЕЙСТВИЕ <<<%s\n' "$C_YELLOW" "$C_BOLD" "$C_RESET"
+	printf '\n'
 	printf '%s[NikkiGo] %s:%s ' "$C_YELLOW" "$prompt" "$C_RESET"
 	if ! command -v stty >/dev/null 2>&1 ||
 		! command -v od >/dev/null 2>&1 ||
@@ -359,6 +364,11 @@ subscription_name="${subscription_name%%\?*}"
 subscription_name="${subscription_name%%\#*}"
 [ -n "$subscription_name" ] ||
 	fail "не удалось определить имя подписки из ссылки"
+if [ "$subscription_name" = 'sub.csm.transib.services' ]; then
+	SUPPORT_MODE='transib'
+else
+	SUPPORT_MODE='provider'
+fi
 say "Имя подписки определено из ссылки: $subscription_name"
 
 existing_url="$(uci -q get nikki.ssh_transibservice.url || true)"

@@ -123,7 +123,12 @@ grep -q 'wget -qO- "$UPSTREAM_INSTALLER" | LUCI_I18N=1 ash' "$ROOT/router-instal
 	fail 'Russian package flag reaches upstream installer'
 pass 'Russian package flag reaches upstream installer'
 
-grep -q 'ТРЕБУЕТСЯ ДЕЙСТВИЕ' "$ROOT/router-install.sh" &&
-	grep -q "C_YELLOW" "$ROOT/router-install.sh" ||
+grep -q "C_YELLOW.*prompt" "$ROOT/router-install.sh" ||
 	fail 'highlighted router input prompt'
 pass 'highlighted router input prompt'
+
+grep -q "subscription_name.*sub.csm.transib.services" "$ROOT/router-install.sh" &&
+	grep -q "SUPPORT_MODE='provider'" "$ROOT/router-install.sh" &&
+	grep -q "SUPPORT_MODE='transib'" "$ROOT/router-install.sh" ||
+	fail 'provider-aware support routing'
+pass 'provider-aware support routing'
