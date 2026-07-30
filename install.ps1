@@ -33,6 +33,8 @@ try {
     }
     [Console]::Error.WriteLine("NikkiGo failed: $($_.Exception.Message)")
     Write-Host "Telegram support: $SupportBot" -ForegroundColor Yellow
+    Write-Host 'Send a screenshot of this window from the launch command through the error,' -ForegroundColor Yellow
+    Write-Host 'or copy and send the complete console text.' -ForegroundColor Yellow
     return
 }
 }

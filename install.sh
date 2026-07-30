@@ -15,6 +15,8 @@ fail() {
 	SUPPORT_SHOWN=1
 	printf 'Ошибка: %s\n' "$*" >&2
 	printf 'Если нужна помощь, напишите в Telegram-бот: %s\n' "$SUPPORT_BOT" >&2
+	printf 'Пришлите скриншот окна от команды запуска до ошибки\n' >&2
+	printf 'или скопируйте и отправьте весь текст из консоли.\n' >&2
 	exit 1
 }
 
@@ -23,6 +25,8 @@ finish_local() {
 	if [ "$status" -ne 0 ] && [ "$SUPPORT_SHOWN" -eq 0 ]; then
 		printf 'NikkiGo завершился с неожиданной ошибкой.\n' >&2
 		printf 'Если нужна помощь, напишите в Telegram-бот: %s\n' "$SUPPORT_BOT" >&2
+		printf 'Пришлите скриншот окна от команды запуска до ошибки\n' >&2
+		printf 'или скопируйте и отправьте весь текст из консоли.\n' >&2
 	fi
 	trap - 0
 	exit "$status"
