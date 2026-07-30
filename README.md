@@ -6,6 +6,9 @@ Interactive SSH installer for deploying NikkiOpen from
 [lanetsky/nikkiopen](https://github.com/lanetsky/nikkiopen) to an OpenWrt
 router.
 
+Prefer not to run an installer? See the
+[fully manual installation guide](MANUAL_INSTALL.md).
+
 ## Linux and macOS
 
 ```sh

@@ -6,6 +6,9 @@
 [lanetsky/nikkiopen](https://github.com/lanetsky/nikkiopen) на роутер с
 OpenWrt через SSH.
 
+Если вы не хотите запускать установщик, используйте
+[руководство по полностью ручной установке](MANUAL_INSTALL.ru.md).
+
 ## Linux и macOS
 
 ```sh
