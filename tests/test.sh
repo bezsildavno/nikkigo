@@ -139,6 +139,6 @@ grep -q '/etc/init.d/rpcd restart' "$ROOT/router-install.sh" &&
 pass 'LuCI RPC backend registration'
 
 grep -q 'предоставляется «как есть»' "$ROOT/router-install.sh" &&
-	grep -q 'Для подтверждения ответственности введите 1337' "$ROOT/router-install.sh" ||
+	grep -q 'Для подтверждения ответственности введите 322' "$ROOT/router-install.sh" ||
 	fail 'explicit risk acknowledgement'
 pass 'explicit risk acknowledgement'
