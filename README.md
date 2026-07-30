@@ -44,7 +44,7 @@ The installer:
 1. detects the default gateway;
 2. asks for the router address, SSH user, and port;
 3. connects using the system `ssh` client;
-4. detects whether NikkiOpen is installed;
+4. detects whether Taproom Nikki is installed;
 5. offers installation or update, and removal for an existing installation;
 6. requests the subscription URL during installation or update;
 7. derives its name from the URL domain and updates one stable section without duplicates;

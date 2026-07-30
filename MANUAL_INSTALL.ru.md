@@ -1,4 +1,4 @@
-# Ручная установка NikkiOpen
+# Ручная установка Taproom Nikki
 
 [English](MANUAL_INSTALL.md) | [Русский](MANUAL_INSTALL.ru.md)
 
@@ -20,12 +20,12 @@ NikkiGo или другого установочного скрипта.
 неизвестна, сначала выполните только команды чтения из раздела 1, отключитесь,
 скачайте подходящие файлы и затем подключитесь снова.
 
-1. Архив NikkiOpen для вашей версии OpenWrt и архитектуры со страницы
+1. Архив Taproom Nikki для вашей версии OpenWrt и архитектуры со страницы
    [официальных релизов](https://github.com/lanetsky/nikkiopen/releases).
 2. Резервный архив `dist-cdn-fonts.zip` со страницы
    [официальных релизов Zashboard](https://github.com/Zephyruso/zashboard/releases).
    Он понадобится только в том случае, если панель не окажется внутри
-   установленного пакета или не будет подготовлена самим NikkiOpen.
+   установленного пакета или не будет подготовлена самим Taproom Nikki.
 3. Программу для передачи файлов по SCP/SFTP либо штатную команду `scp`.
 
 Официальные клиенты с графическим интерфейсом:
@@ -176,7 +176,7 @@ tail -n 30 /var/log/nikki/core.log
 Официальный проект:
 [Zephyruso/zashboard](https://github.com/Zephyruso/zashboard).
 
-Сначала проверьте, установлена ли панель самим пакетом NikkiOpen:
+Сначала проверьте, установлена ли панель самим пакетом Taproom Nikki:
 
 ```sh
 test -f /etc/nikki/run/ui/index.html && echo "Zashboard уже установлен"

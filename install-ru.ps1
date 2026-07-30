@@ -60,6 +60,15 @@ function Read-NikkiInput([string]$Prompt) {
     }
 }
 
+Write-Host 'ВНИМАНИЕ: изменение программного обеспечения роутера выполняется на ваш страх и риск.' -ForegroundColor Yellow
+Write-Host 'NikkiGo предоставляется «как есть», без гарантий.' -ForegroundColor Yellow
+Write-Host 'Перед продолжением убедитесь, что у вас есть резервная копия и доступ к роутеру.'
+$riskCode = Read-NikkiInput 'Для подтверждения ответственности введите 322'
+if ($riskCode -ne '322') {
+    Write-Host 'Операция отменена. Изменения не внесены.' -ForegroundColor Yellow
+    return
+}
+
 if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
     Stop-WithError 'Не найден клиент OpenSSH. Установите компонент OpenSSH Client в Windows.'
 }
@@ -73,12 +82,12 @@ if (-not $gateway) {
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
-Write-Host ' NikkiGo — установка NikkiOpen на OpenWrt' -ForegroundColor Cyan
+Write-Host ' NikkiGo — установка Taproom Nikki на OpenWrt' -ForegroundColor Cyan
 Write-Host '============================================================' -ForegroundColor Cyan
 Write-Host ''
 Write-Host 'Перед подключением нужно ответить на три простых вопроса.'
 Write-Host 'Чтобы выбрать предложенное значение, просто нажмите Enter.'
-Write-Host "Исходный код NikkiOpen: $UpstreamUrl"
+Write-Host "Исходный код Taproom Nikki: $UpstreamUrl"
 Write-Host ''
 
 Write-Host '[Шаг 1 из 3] Адрес роутера' -ForegroundColor Yellow

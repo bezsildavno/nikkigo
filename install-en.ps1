@@ -60,6 +60,15 @@ function Read-NikkiInput([string]$Prompt) {
     }
 }
 
+Write-Host 'WARNING: modifying router software is performed at your own risk.' -ForegroundColor Yellow
+Write-Host 'NikkiGo is provided “as is”, without warranties.' -ForegroundColor Yellow
+Write-Host 'Before continuing, make sure you have a backup and access to the router.'
+$riskCode = Read-NikkiInput 'Enter 322 to acknowledge responsibility'
+if ($riskCode -ne '322') {
+    Write-Host 'Operation cancelled. No changes were made.' -ForegroundColor Yellow
+    return
+}
+
 if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
     Stop-WithError 'OpenSSH Client was not found. Install the Windows OpenSSH Client feature.'
 }
@@ -73,12 +82,12 @@ if (-not $gateway) {
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
-Write-Host ' NikkiGo - NikkiOpen installer for OpenWrt' -ForegroundColor Cyan
+Write-Host ' NikkiGo - Taproom Nikki installer for OpenWrt' -ForegroundColor Cyan
 Write-Host '============================================================' -ForegroundColor Cyan
 Write-Host ''
 Write-Host 'You will answer three simple questions before connecting.'
 Write-Host 'A value in [brackets] is the default. Press Enter to use it.'
-Write-Host "NikkiOpen source: $UpstreamUrl"
+Write-Host "Taproom Nikki source: $UpstreamUrl"
 Write-Host ''
 
 Write-Host '[Step 1 of 3] Router address' -ForegroundColor Yellow

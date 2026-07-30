@@ -203,19 +203,11 @@ finish() {
 trap finish EXIT
 trap cancel_remote INT TERM
 
-say "Устанавливается NikkiOpen из официального репозитория форка:"
+say "Устанавливается Taproom Nikki из официального репозитория форка:"
 say "$UPSTREAM_REPOSITORY"
 say "Технические имена пакета и службы в OpenWrt: nikki."
 say "Веб-панель Zashboard устанавливается из официального репозитория:"
 say "$ZASHBOARD_REPOSITORY"
-
-CURRENT_STAGE='подтверждение ответственности пользователем'
-say "ВНИМАНИЕ: изменение программного обеспечения роутера выполняется на ваш страх и риск."
-say "NikkiGo предоставляется «как есть», без гарантий."
-say "Перед продолжением убедитесь, что у вас есть резервная копия и доступ к роутеру."
-read_remote_input "Для подтверждения ответственности введите 322"
-[ "$REPLY" = '322' ] ||
-	cancel_before_changes
 
 CURRENT_STAGE='проверка прав и совместимости роутера'
 [ "$(id -u)" = '0' ] || fail "требуются права root"
@@ -255,9 +247,9 @@ if [ -x /etc/init.d/nikki ]; then
 	else
 		installed_version=
 	fi
-	say "NikkiOpen уже установлен${installed_version:+, версия $installed_version}."
-	say "1 — обновить NikkiOpen и настроить подписку"
-	say "2 — удалить NikkiOpen и его конфигурацию"
+	say "Taproom Nikki уже установлен${installed_version:+, версия $installed_version}."
+	say "1 — обновить Taproom Nikki и настроить подписку"
+	say "2 — удалить Taproom Nikki и его конфигурацию"
 	say "3 — выйти без изменений"
 	read_remote_input "Выберите действие [1]"
 	action="${REPLY:-1}"
@@ -269,26 +261,26 @@ if [ -x /etc/init.d/nikki ]; then
 	esac
 else
 	action='install'
-	say "NikkiOpen не обнаружен. Будет выполнена установка."
+	say "Taproom Nikki не обнаружен. Будет выполнена установка."
 fi
 
 if [ "$action" = 'remove' ]; then
-	say "ВНИМАНИЕ: будут удалены NikkiOpen, подписки, настройки и логи."
+	say "ВНИМАНИЕ: будут удалены Taproom Nikki, подписки, настройки и логи."
 	read_remote_input "Для подтверждения введите 1337"
 	[ "$REPLY" = '1337' ] ||
 		cancel_before_changes
-	CURRENT_STAGE='удаление NikkiOpen'
+	CURRENT_STAGE='удаление Taproom Nikki'
 	sed -i '/# nikkigo-update$/d' /etc/crontabs/root 2>/dev/null || true
 	/etc/init.d/cron restart 2>/dev/null || true
 	if ! wget -qO- "$UPSTREAM_UNINSTALLER" | ash; then
-		fail "штатное удаление NikkiOpen завершилось ошибкой"
+		fail "штатное удаление Taproom Nikki завершилось ошибкой"
 	fi
-	say "NikkiOpen и его конфигурация удалены."
+	say "Taproom Nikki и его конфигурация удалены."
 	exit 0
 fi
 
 CURRENT_STAGE='создание резервной копии рабочего состояния'
-say "Сохранение текущей конфигурации и состояния NikkiOpen"
+say "Сохранение текущей конфигурации и состояния Taproom Nikki"
 if ! backup_state; then
 	fail "не удалось создать резервную копию перед установкой"
 fi
@@ -316,11 +308,11 @@ else
 	fail "не найден поддерживаемый менеджер пакетов opkg или apk"
 fi
 
-CURRENT_STAGE="${action} NikkiOpen и зависимостей"
+CURRENT_STAGE="${action} Taproom Nikki и зависимостей"
 if [ "$action" = 'update' ]; then
-	say "Обновление NikkiOpen из $UPSTREAM_REPOSITORY"
+	say "Обновление Taproom Nikki из $UPSTREAM_REPOSITORY"
 else
-	say "Установка NikkiOpen из $UPSTREAM_REPOSITORY"
+	say "Установка Taproom Nikki из $UPSTREAM_REPOSITORY"
 fi
 if [ "${NIKKIGO_LANGUAGE:-ru}" = 'ru' ]; then
 	if wget -qO- "$UPSTREAM_INSTALLER" | LUCI_I18N=1 ash; then
@@ -336,18 +328,18 @@ else
 	fi
 fi
 if [ "$upstream_status" -ne 0 ]; then
-	say "Не удалось автоматически установить или обновить NikkiOpen."
+	say "Не удалось автоматически установить или обновить Taproom Nikki."
 	say "Проверьте ошибки пакетного менеджера выше."
 	say "Основные зависимости: ca-bundle curl yq firewall4 ip-full"
 	say "Модули ядра: kmod-inet-diag kmod-nft-socket kmod-nft-tproxy kmod-tun kmod-dummy"
 	say "Ручная установка и готовые пакеты: $UPSTREAM_REPOSITORY/releases"
-	fail "ошибка установки NikkiOpen или его зависимостей"
+	fail "ошибка установки Taproom Nikki или его зависимостей"
 fi
 
-[ -x /etc/init.d/nikki ] || fail "NikkiOpen не установился"
+[ -x /etc/init.d/nikki ] || fail "Taproom Nikki не установился"
 
-CURRENT_STAGE='регистрация панели NikkiOpen в LuCI'
-say "Регистрация панели NikkiOpen в LuCI"
+CURRENT_STAGE='регистрация панели Taproom Nikki в LuCI'
+say "Регистрация панели Taproom Nikki в LuCI"
 rm -f /tmp/luci-indexcache
 if [ -x /etc/init.d/rpcd ]; then
 	if /etc/init.d/rpcd restart; then
@@ -365,7 +357,7 @@ fi
 if command -v ubus >/dev/null 2>&1 &&
 	ubus -S list luci.nikki >/dev/null 2>&1; then
 	LUCI_BACKEND_READY=1
-	say "RPC-модуль панели NikkiOpen зарегистрирован."
+	say "RPC-модуль панели Taproom Nikki зарегистрирован."
 else
 	LUCI_BACKEND_READY=0
 	say "Предупреждение: LuCI пока не видит RPC-модуль luci.nikki."
@@ -373,26 +365,26 @@ else
 fi
 
 if [ "${NIKKIGO_LANGUAGE:-ru}" = 'ru' ]; then
-	CURRENT_STAGE='установка русского языка NikkiOpen'
-	say "Установка русского языка панели NikkiOpen"
+	CURRENT_STAGE='установка русского языка Taproom Nikki'
+	say "Установка русского языка панели Taproom Nikki"
 	if [ -x /bin/opkg ]; then
 		if opkg status luci-i18n-nikki-ru 2>/dev/null |
 			grep -q '^Status: .* installed'; then
-			say "Русский язык панели NikkiOpen установлен из официального архива."
+			say "Русский язык панели Taproom Nikki установлен из официального архива."
 		elif opkg install luci-i18n-nikki-ru; then
-			say "Русский язык панели NikkiOpen установлен."
+			say "Русский язык панели Taproom Nikki установлен."
 		else
 			say "Предупреждение: пакет luci-i18n-nikki-ru недоступен для этой прошивки."
-			say "NikkiOpen установлен и продолжит работать с языком, доступным в LuCI."
+			say "Taproom Nikki установлен и продолжит работать с языком, доступным в LuCI."
 		fi
 	elif [ -x /usr/bin/apk ]; then
 		if apk info -e luci-i18n-nikki-ru >/dev/null 2>&1; then
-			say "Русский язык панели NikkiOpen установлен из официального архива."
+			say "Русский язык панели Taproom Nikki установлен из официального архива."
 		elif apk add luci-i18n-nikki-ru; then
-			say "Русский язык панели NikkiOpen установлен."
+			say "Русский язык панели Taproom Nikki установлен."
 		else
 			say "Предупреждение: пакет luci-i18n-nikki-ru недоступен для этой прошивки."
-			say "NikkiOpen установлен и продолжит работать с языком, доступным в LuCI."
+			say "Taproom Nikki установлен и продолжит работать с языком, доступным в LuCI."
 		fi
 	fi
 fi
@@ -500,7 +492,7 @@ EOF
 sleep 3
 
 /etc/init.d/nikki running >/dev/null 2>&1 ||
-	fail "ядро NikkiOpen не запустилось; будет выполнен rollback"
+	fail "ядро Taproom Nikki не запустилось; будет выполнен rollback"
 validate_profile /etc/nikki/run/config.yaml ||
 	fail "итоговый профиль не прошёл проверку ядра; будет выполнен rollback"
 
@@ -516,7 +508,7 @@ select_safe_proxies ||
 	say "Предварительный выбор proxy-group не выполнен; будет использована функциональная проверка."
 
 CURRENT_STAGE='включение перехвата и проверка интернета'
-say "Включение NikkiOpen и проверка DNS/HTTPS"
+say "Включение Taproom Nikki и проверка DNS/HTTPS"
 uci -q set nikki.proxy.enabled='1'
 uci -q commit nikki
 /etc/init.d/nikki restart
@@ -527,7 +519,7 @@ if ! health_check; then
 		fail "ни один проверенный вариант не восстановил DNS/HTTPS; выполняется rollback"
 	fi
 fi
-say "NikkiOpen успешно запущен; DNS и HTTPS работают."
+say "Taproom Nikki успешно запущен; DNS и HTTPS работают."
 CURRENT_STAGE='повторная подготовка панели Zashboard'
 if ensure_zashboard; then
 	say "Панель Zashboard подготовлена: /etc/nikki/run/ui/index.html"

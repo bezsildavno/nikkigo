@@ -138,12 +138,12 @@ grep -q '/etc/init.d/rpcd restart' "$ROOT/router-install.sh" &&
 	fail 'LuCI RPC backend registration'
 pass 'LuCI RPC backend registration'
 
-grep -q 'предоставляется «как есть»' "$ROOT/router-install.sh" &&
-	grep -q 'Для подтверждения ответственности введите 322' "$ROOT/router-install.sh" ||
+grep -q 'предоставляется «как есть»' "$ROOT/install.sh" &&
+	grep -q 'Для подтверждения ответственности введите 322' "$ROOT/install.sh" ||
 	fail 'explicit risk acknowledgement'
-consent_line="$(grep -n "Для подтверждения ответственности введите 322" "$ROOT/router-install.sh" | head -n 1 | cut -d: -f1)"
-compatibility_line="$(grep -n "проверка прав и совместимости роутера" "$ROOT/router-install.sh" | head -n 1 | cut -d: -f1)"
-[ "$consent_line" -lt "$compatibility_line" ] ||
+consent_line="$(grep -n "Для подтверждения ответственности введите 322" "$ROOT/install.sh" | head -n 1 | cut -d: -f1)"
+banner_line="$(grep -n "NikkiGo — установка Taproom Nikki на OpenWrt" "$ROOT/install.sh" | head -n 1 | cut -d: -f1)"
+[ "$consent_line" -lt "$banner_line" ] ||
 	fail 'risk acknowledgement must be first'
 pass 'explicit risk acknowledgement'
 
@@ -154,7 +154,7 @@ grep -q 'trap cancel_remote INT TERM' "$ROOT/router-install.sh" &&
 pass 'clean cancellation and existing-provider detection'
 
 grep -q 'Операция отменена. Изменения не внесены.' "$ROOT/router-install.sh" &&
-	grep -q "'322'.*||" "$ROOT/router-install.sh" &&
+	grep -q '\[ "$REPLY" != '\''322'\'' \]' "$ROOT/install.sh" &&
 	grep -q "'1337'.*||" "$ROOT/router-install.sh" ||
 	fail 'confirmation refusal exits cleanly'
 pass 'confirmation refusal exits cleanly'

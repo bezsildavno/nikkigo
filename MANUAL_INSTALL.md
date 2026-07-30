@@ -1,4 +1,4 @@
-# Manual NikkiOpen installation
+# Manual Taproom Nikki installation
 
 [English](MANUAL_INSTALL.md) | [Русский](MANUAL_INSTALL.ru.md)
 
@@ -18,10 +18,10 @@ OpenWrt release or architecture is unknown, run only the read-only commands
 in section 1, disconnect, download the matching files, and reconnect.
 
 1. The archive matching the OpenWrt release and architecture from the
-   [official NikkiOpen releases](https://github.com/lanetsky/nikkiopen/releases).
+   [official Taproom Nikki releases](https://github.com/lanetsky/nikkiopen/releases).
 2. A fallback `dist-cdn-fonts.zip` from the
    [official Zashboard releases](https://github.com/Zephyruso/zashboard/releases).
-   It is used only if NikkiOpen does not already provide the dashboard.
+   It is used only if Taproom Nikki does not already provide the dashboard.
 3. An SCP/SFTP client, unless the operating system already provides `scp`.
 
 Official graphical clients:
@@ -140,7 +140,7 @@ Confirm that profile validation and core startup succeeded.
 ## 7. Zashboard
 
 Use the official [Zephyruso/zashboard](https://github.com/Zephyruso/zashboard)
-project. First check whether NikkiOpen already installed the dashboard:
+project. First check whether Taproom Nikki already installed the dashboard:
 
 ```sh
 test -f /etc/nikki/run/ui/index.html && echo "Zashboard is already installed"
