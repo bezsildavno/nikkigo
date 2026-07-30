@@ -12,6 +12,14 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/bezsildavno/nikkigo/main/i
 
 ## Windows PowerShell
 
+Русская версия:
+
+```powershell
+irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install-ru.ps1 | iex
+```
+
+English version:
+
 ```powershell
 irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.ps1 | iex
 ```
