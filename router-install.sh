@@ -527,10 +527,12 @@ if [ -n "$expire_at" ]; then
 else
 	say "Провайдер не сообщил дату окончания подписки."
 fi
-say "Панель управления NikkiOpen:"
-say "http://$router_address/cgi-bin/luci/admin/services/nikki"
-say "Если LuCI настроен на HTTPS, замените http:// на https://."
+say "Как открыть управление Taproom Nikki:"
+say "1. Откройте обычную веб-панель роутера."
+say "2. После установки заново войдите в LuCI."
+say "3. Перейдите: Сервисы → Nikki."
 if [ "${LUCI_BACKEND_READY:-0}" = '0' ]; then
-	say "Если страница показывает «No related RPC reply», обновите её через Ctrl+F5."
+	say "Если страница показывает «No related RPC reply», выйдите из LuCI,"
+	say "войдите снова и обновите страницу через Ctrl+F5."
 	say "Если ошибка останется, выполните по SSH: /etc/init.d/rpcd restart"
 fi

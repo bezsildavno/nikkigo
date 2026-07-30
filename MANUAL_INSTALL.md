@@ -106,11 +106,8 @@ ubus -S list luci.nikki
 
 ## 5. Add the subscription
 
-Open:
-
-```text
-http://ROUTER_ADDRESS/cgi-bin/luci/admin/services/nikki
-```
+Open the router's regular web interface, sign in to LuCI again after the
+`rpcd` restart, and go to `Services → Nikki`.
 
 Create a subscription in the profiles/subscriptions page:
 
