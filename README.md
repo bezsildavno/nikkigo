@@ -102,8 +102,7 @@ sanitized result to `/var/log/nikkigo-update.log`.
 The SSH password is neither stored nor handled by NikkiGo. The system SSH
 client requests it directly.
 
-For additional help, contact the Telegram bot
-`@transib_service_gena_bot` and send a screenshot from the launch command
+For additional help, contact the you're provider and send a screenshot from the launch command
 through the error, or copy the complete console output.
 
 ## Requirements
