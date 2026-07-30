@@ -1,10 +1,12 @@
 # NikkiGo
 
-Интерактивная установка NikkiOpen из
-[lanetsky/nikkiopen](https://github.com/lanetsky/nikkiopen) на роутер с
-OpenWrt через SSH.
+[English](README.md) | [Русский](README.ru.md)
 
-## Linux и macOS
+Interactive SSH installer for deploying NikkiOpen from
+[lanetsky/nikkiopen](https://github.com/lanetsky/nikkiopen) to an OpenWrt
+router.
+
+## Linux and macOS
 
 ```sh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.sh)"
@@ -12,88 +14,86 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/bezsildavno/nikkigo/main/i
 
 ## Windows PowerShell
 
-Язык определяется автоматически по настройкам Windows:
+The language is selected automatically from the Windows locale:
 
 ```powershell
 irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.ps1 | iex
 ```
 
-Принудительно выбрать русский:
+Force Russian:
 
 ```powershell
 $env:NIKKIGO_LANG='ru'; irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.ps1 | iex
 ```
 
-Принудительно выбрать английский:
+Force English:
 
 ```powershell
 $env:NIKKIGO_LANG='en'; irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.ps1 | iex
 ```
 
-Установщик:
+The installer:
 
-1. определяет адрес основного шлюза;
-2. спрашивает адрес, SSH-пользователя и порт;
-3. подключается к роутеру штатным `ssh`;
-4. определяет, установлен ли NikkiOpen;
-5. предлагает установку либо обновление, а для установленного пакета — удаление;
-6. при установке/обновлении принимает ссылку подписки;
-7. берёт имя подписки из домена ссылки и обновляет существующую секцию без дубликата;
-8. сохраняет рабочую конфигурацию и запускает ядро без перехвата трафика;
-9. проверяет профиль, локальный API, DNS и HTTPS и только затем включает перехват;
-10. ежедневно в 05:00 транзакционно обновляет подписку и автоматически откатывает её при отказе;
-11. показывает срок подписки и ссылку на панель LuCI.
+1. detects the default gateway;
+2. asks for the router address, SSH user, and port;
+3. connects using the system `ssh` client;
+4. detects whether NikkiOpen is installed;
+5. offers installation or update, and removal for an existing installation;
+6. requests the subscription URL during installation or update;
+7. derives its name from the URL domain and updates one stable section without duplicates;
+8. backs up the working state and starts the core without traffic interception;
+9. checks the profile, local API, DNS, and HTTPS before enabling interception;
+10. updates the subscription transactionally every day at 05:00 and rolls back on failure;
+11. shows the subscription expiration date and LuCI panel URL.
 
-## Fail-open и автоматический rollback
+## Fail-open and automatic rollback
 
-Успешное скачивание и синтаксическая проверка подписки ещё не означают, что
-прокси действительно работает. Поэтому NikkiGo сначала сохраняет UCI,
-активный профиль, файлы подписок и состояние службы. Новое ядро запускается
-без перехвата DNS и трафика. После подготовки безопасных выборов proxy-group
-NikkiGo включает перехват и несколько раз проверяет:
+A successful subscription download and syntax check do not prove that the
+proxy works. NikkiGo first saves UCI, the active profile, subscription files,
+and service state. It starts the new core without intercepting DNS or traffic.
+After preparing safe proxy-group selections, NikkiGo enables interception and
+repeatedly checks:
 
-- работу службы и локального API Mihomo;
-- разрешение контрольного домена через DNS;
-- HTTPS-доступ к контрольному адресу.
+- the service and local Mihomo API;
+- DNS resolution of a control domain;
+- HTTPS access to a control endpoint.
 
-Если проверка не проходит, Nikki штатно останавливается, созданные ею правила
-перехвата удаляются, а прежняя рабочая конфигурация восстанавливается. В
-консоли появляется сообщение: «Nikki отключён, обычный интернет
-восстановлен». Роутер при этом не перезагружается.
+If these checks fail, Nikki is stopped normally, its interception rules are
+removed, and the previous working state is restored. The router is never
+rebooted.
 
 ## Zashboard
 
-Архив панели предварительно скачивается во временный каталог. NikkiGo находит
-`index.html` как в корне архива, так и внутри `dist/`, а затем устанавливает
-содержимое в `/etc/nikki/run/ui`, чтобы итоговый файл находился по пути
+The dashboard archive is downloaded to a temporary staging directory.
+NikkiGo supports archives containing either a root `index.html` or
+`dist/index.html`, and installs the contents so the final file is
 `/etc/nikki/run/ui/index.html`.
 
-Панель LuCI открывается по адресу:
+Open the LuCI panel at:
 
 ```text
-http://АДРЕС_РОУТЕРА/cgi-bin/luci/admin/services/nikki
+http://ROUTER_ADDRESS/cgi-bin/luci/admin/services/nikki
 ```
 
-Недоступность Zashboard выводится как отдельное предупреждение и сама по себе
-не считается причиной отключать обычный интернет.
+Zashboard failure is reported separately and does not by itself disable
+normal internet access.
 
-## Диагностика
+## Diagnostics
 
-Сообщения различают загрузку подписки, структуру YAML, запуск ядра, локальный
-API, DNS/HTTPS и Zashboard. Ежедневное обновление пишет краткий результат в
-`/var/log/nikkigo-update.log`, не записывая URL подписки и секреты.
+Diagnostics distinguish subscription download, YAML structure, core startup,
+local API, DNS/HTTPS, and Zashboard failures. Daily updates write a short
+sanitized result to `/var/log/nikkigo-update.log`.
 
-SSH-пароль не сохраняется и не передаётся установщику: его запрашивает
-системный SSH-клиент.
+The SSH password is neither stored nor handled by NikkiGo. The system SSH
+client requests it directly.
 
-При ошибке установщик показывает этап и диагностику. Дополнительная помощь:
-Telegram-бот `@transib_service_gena_bot`. В обращение нужно приложить
-скриншот окна от команды запуска до ошибки либо скопировать весь текст
-консоли.
+For additional help, contact the Telegram bot
+`@transib_service_gena_bot` and send a screenshot from the launch command
+through the error, or copy the complete console output.
 
-## Требования
+## Requirements
 
-- роутер с поддерживаемой версией OpenWrt и firewall4;
-- включённый SSH-доступ к роутеру;
-- Windows 10/11 с OpenSSH Client, Linux или macOS;
-- `curl` либо `wget` на Linux/macOS.
+- a supported OpenWrt router with firewall4;
+- SSH access enabled on the router;
+- Windows 10/11 with OpenSSH Client, Linux, or macOS;
+- `curl` or `wget` on Linux/macOS.
