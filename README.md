@@ -2,12 +2,15 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-Interactive SSH installer for deploying NikkiOpen from
+Interactive SSH installer for deploying the Taproom Nikki fork from
 [lanetsky/nikkiopen](https://github.com/lanetsky/nikkiopen) to an OpenWrt
 router.
 
 Prefer not to run an installer? See the
 [fully manual installation guide](MANUAL_INSTALL.md).
+
+NikkiGo is an independent project. See
+[third-party notices and licenses](THIRD_PARTY_NOTICES.md).
 
 ## Linux and macOS
 

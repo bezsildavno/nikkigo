@@ -2,12 +2,46 @@
 
 [English](MANUAL_INSTALL.md) | [Русский](MANUAL_INSTALL.ru.md)
 
-This guide installs official packages from
+This guide installs official Taproom Nikki Fork packages from
 [lanetsky/nikkiopen](https://github.com/lanetsky/nikkiopen) without running
 NikkiGo or another installation script.
 
 > Back up the router first and keep the SSH session open. A broken proxy or
 > DNS configuration can interrupt internet access for the LAN.
+
+## Before connecting to the router
+
+Download everything to the computer before changing the router. If the
+OpenWrt release or architecture is unknown, run only the read-only commands
+in section 1, disconnect, download the matching files, and reconnect.
+
+1. The archive matching the OpenWrt release and architecture from the
+   [official NikkiOpen releases](https://github.com/lanetsky/nikkiopen/releases).
+2. A fallback `dist-cdn-fonts.zip` from the
+   [official Zashboard releases](https://github.com/Zephyruso/zashboard/releases).
+   It is used only if NikkiOpen does not already provide the dashboard.
+3. An SCP/SFTP client, unless the operating system already provides `scp`.
+
+Official graphical clients:
+
+- Windows — [WinSCP](https://winscp.net/eng/download.php);
+- Windows and macOS — [Cyberduck](https://cyberduck.io/download/);
+- Windows, macOS, and Linux —
+  [FileZilla Client](https://filezilla-project.org/download.php?type=client).
+
+Download these applications only from their official sites. In WinSCP, try
+the SCP protocol first and enter the router address, SSH port (usually `22`),
+and the `root` user. Cyberduck and FileZilla use SFTP and work only when an
+SFTP server is installed on the router.
+
+Linux and macOS users can use the built-in terminal:
+
+```sh
+scp -O nikki_*.tar.gz dist-cdn-fonts.zip root@ROUTER_ADDRESS:/tmp/
+```
+
+`-O` forces the classic SCP protocol supported by Dropbear on many OpenWrt
+builds.
 
 ## 1. Check the router
 
@@ -32,10 +66,8 @@ cp -Rp /etc/nikki/subscriptions /root/nikki-backup/ 2>/dev/null || true
 
 ## 3. Download official packages
 
-Open the
-[lanetsky/nikkiopen releases](https://github.com/lanetsky/nikkiopen/releases)
-page and download the archive matching both the OpenWrt release and router
-architecture. Copy it to `/tmp` on the router, then extract it:
+Transfer the previously downloaded archive to `/tmp` using SFTP/SCP, then
+extract it:
 
 ```sh
 mkdir -p /tmp/nikki-manual
@@ -109,8 +141,16 @@ Confirm that profile validation and core startup succeeded.
 ## 7. Zashboard
 
 Use the official [Zephyruso/zashboard](https://github.com/Zephyruso/zashboard)
-archive referenced by `external-ui-url`. Extract it to a temporary directory
-and locate the real `index.html`:
+project. First check whether NikkiOpen already installed the dashboard:
+
+```sh
+test -f /etc/nikki/run/ui/index.html && echo "Zashboard is already installed"
+```
+
+If the file exists, do not replace it. Continue to the next section.
+
+Only when it is missing, use the official `dist-cdn-fonts.zip` downloaded
+before connecting to the router. Extract it and locate the real `index.html`:
 
 ```sh
 mkdir -p /tmp/zashboard-unpack

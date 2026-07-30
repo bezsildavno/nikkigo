@@ -2,12 +2,15 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-Интерактивная установка NikkiOpen из
+Интерактивная установка форка Taproom Nikki из
 [lanetsky/nikkiopen](https://github.com/lanetsky/nikkiopen) на роутер с
 OpenWrt через SSH.
 
 Если вы не хотите запускать установщик, используйте
 [руководство по полностью ручной установке](MANUAL_INSTALL.ru.md).
+
+NikkiGo является независимым проектом. См.
+[уведомления о сторонних компонентах и лицензиях](THIRD_PARTY_NOTICES.md).
 
 ## Linux и macOS
 
