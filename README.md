@@ -71,7 +71,9 @@ its own health check.
 
 ## Zashboard
 
-The dashboard archive is downloaded to a temporary staging directory.
+The web dashboard is provided by the official
+[Zephyruso/zashboard](https://github.com/Zephyruso/zashboard) project.
+Its archive is downloaded to a temporary staging directory.
 NikkiGo supports archives containing either a root `index.html` or
 `dist/index.html`, and installs the contents so the final file is
 `/etc/nikki/run/ui/index.html`.

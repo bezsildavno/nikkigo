@@ -4,6 +4,7 @@ set -eu
 UPSTREAM_INSTALLER='https://raw.githubusercontent.com/lanetsky/nikkiopen/main/install.sh'
 UPSTREAM_UNINSTALLER='https://raw.githubusercontent.com/lanetsky/nikkiopen/main/uninstall.sh'
 UPSTREAM_REPOSITORY='https://github.com/lanetsky/nikkiopen'
+ZASHBOARD_REPOSITORY='https://github.com/Zephyruso/zashboard'
 SUPPORT_BOT='@transib_service_gena_bot'
 CURRENT_STAGE='запуск'
 SUPPORT_SHOWN=0
@@ -113,6 +114,8 @@ trap 'exit 130' INT TERM
 say "Устанавливается NikkiOpen из официального репозитория форка:"
 say "$UPSTREAM_REPOSITORY"
 say "Технические имена пакета и службы в OpenWrt: nikki."
+say "Веб-панель Zashboard устанавливается из официального репозитория:"
+say "$ZASHBOARD_REPOSITORY"
 
 CURRENT_STAGE='проверка прав и совместимости роутера'
 [ "$(id -u)" = '0' ] || fail "требуются права root"
