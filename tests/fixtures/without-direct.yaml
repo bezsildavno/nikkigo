@@ -1,0 +1,11 @@
+proxies:
+  - name: only-node
+    type: socks5
+    server: 192.0.2.20
+    port: 1080
+proxy-groups:
+  - name: proxy
+    type: select
+    proxies: [only-node]
+rules:
+  - MATCH,proxy

@@ -8,6 +8,12 @@ SUPPORT_BOT='@transib_service_gena_bot'
 CURRENT_STAGE='запуск'
 SUPPORT_SHOWN=0
 
+[ -n "${NIKKIGO_SAFETY_PATH:-}" ] && [ -r "$NIKKIGO_SAFETY_PATH" ] || {
+	printf '[NikkiGo] Ошибка: модуль безопасности не загружен\n' >&2
+	exit 1
+}
+. "$NIKKIGO_SAFETY_PATH"
+
 say() {
 	printf '[NikkiGo] %s\n' "$*"
 }
@@ -90,6 +96,9 @@ cleanup() {
 
 finish() {
 	status=$?
+	if [ "$status" -ne 0 ] && [ "${NIKKIGO_TRANSACTION:-0}" = '1' ]; then
+		restore_state
+	fi
 	cleanup
 	if [ "$status" -ne 0 ] && [ "$SUPPORT_SHOWN" -eq 0 ]; then
 		printf '[NikkiGo] Неожиданная ошибка на этапе: %s\n' "$CURRENT_STAGE" >&2
@@ -164,6 +173,14 @@ if [ "$action" = 'remove' ]; then
 	say "NikkiOpen и его конфигурация удалены."
 	exit 0
 fi
+
+CURRENT_STAGE='создание резервной копии рабочего состояния'
+say "Сохранение текущей конфигурации и состояния NikkiOpen"
+backup_state
+enable_fail_open
+say "Предварительная загрузка Zashboard"
+prepare_zashboard ||
+	say "Zashboard пока не загружен; NikkiGo повторит попытку после установки пакетов."
 
 CURRENT_STAGE='подготовка менеджера пакетов'
 free_kb="$(df -Pk /overlay 2>/dev/null | awk 'NR == 2 { print $4 }')"
@@ -296,38 +313,71 @@ CURRENT_STAGE='загрузка и проверка подписки'
 /etc/init.d/nikki update_subscription ssh_transibservice
 success="$(uci -q get nikki.ssh_transibservice.success || true)"
 if [ "$success" != '1' ]; then
-	say "Последние сообщения Nikki:"
-	tail -n 10 /var/log/nikki/app.log 2>/dev/null || true
-	if [ -n "$previous_profile" ]; then
-		uci set "nikki.config.profile=$previous_profile"
-		uci commit nikki
-	fi
-	fail "Nikki не смог загрузить или проверить подписку; прежний профиль сохранён"
+	fail "Nikki не смог загрузить подписку; будет восстановлено прежнее состояние"
 fi
 
-CURRENT_STAGE='включение и запуск NikkiOpen'
-say "Включение и запуск NikkiOpen"
+subscription_file="/etc/nikki/subscriptions/ssh_transibservice.yaml"
+CURRENT_STAGE='проверка синтаксиса нового профиля'
+yq -M -p yaml -o yaml -e \
+	'(has("proxies") or has("proxy-providers")) and has("proxy-groups")' \
+	"$subscription_file" >/dev/null 2>&1 ||
+	fail "новая подписка скачана, но профиль имеет некорректную структуру"
+
+CURRENT_STAGE='безопасный запуск ядра без перехвата трафика'
+say "Проверка ядра без перехвата DNS и трафика"
 uci -q batch <<EOF
 set nikki.config.profile='subscription:ssh_transibservice'
 set nikki.config.enabled='1'
+set nikki.proxy.enabled='0'
 commit nikki
 EOF
 /etc/init.d/nikki enable
 /etc/init.d/nikki restart
 sleep 3
 
-if /etc/init.d/nikki running >/dev/null 2>&1; then
-	say "NikkiOpen успешно запущен"
+/etc/init.d/nikki running >/dev/null 2>&1 ||
+	fail "ядро NikkiOpen не запустилось; будет выполнен rollback"
+validate_profile /etc/nikki/run/config.yaml ||
+	fail "итоговый профиль не прошёл проверку ядра; будет выполнен rollback"
+
+CURRENT_STAGE='подготовка панели Zashboard'
+if ensure_zashboard; then
+	say "Панель Zashboard подготовлена: /etc/nikki/run/ui/index.html"
 else
-	logread -e Nikki 2>/dev/null | tail -n 20 || true
-	fail "служба NikkiOpen не запустилась"
+	say "Предупреждение: Zashboard подготовить не удалось; это не влияет на обычный интернет."
+fi
+
+CURRENT_STAGE='безопасный выбор прокси'
+select_safe_proxies ||
+	fail "не удалось безопасно подготовить proxy-group; перехват трафика не включён"
+
+CURRENT_STAGE='включение перехвата и проверка интернета'
+say "Включение NikkiOpen и проверка DNS/HTTPS"
+uci -q set nikki.proxy.enabled='1'
+uci -q commit nikki
+/etc/init.d/nikki restart
+if ! health_check; then
+	fail "проверка DNS или HTTPS не пройдена; выполняется rollback"
+fi
+say "NikkiOpen успешно запущен; DNS и HTTPS работают."
+if curl -fsS --max-time 5 "$(controller_url)/ui/" >/dev/null 2>&1; then
+	say "Zashboard отвечает через локальный controller."
+else
+	say "Предупреждение: Zashboard не отвечает, но интернет работает."
 fi
 
 CURRENT_STAGE='настройка ежедневного обновления подписки'
 say "Настройка ежедневного обновления подписки на 05:00"
+mkdir -p /usr/lib/nikkigo
+cp "$NIKKIGO_SAFETY_PATH" /usr/lib/nikkigo/safety.sh
+wget -q -O /usr/lib/nikkigo/update.sh \
+	"$NIKKIGO_BASE_URL/router-update.sh?nikkigo=$(date +%s)" ||
+	fail "не удалось установить безопасный модуль ежедневного обновления"
+chmod 755 /usr/lib/nikkigo/safety.sh /usr/lib/nikkigo/update.sh
 sed -i '/# nikkigo-update$/d' /etc/crontabs/root
-echo '0 5 * * * /etc/init.d/nikki update_subscription ssh_transibservice; [ "$(uci -q get nikki.ssh_transibservice.success)" = "1" ] && /etc/init.d/nikki reload # nikkigo-update' >> /etc/crontabs/root
+echo '0 5 * * * /usr/lib/nikkigo/update.sh >>/var/log/nikkigo-update.log 2>&1 # nikkigo-update' >> /etc/crontabs/root
 /etc/init.d/cron restart
+commit_state
 
 expire_at="$(uci -q get nikki.ssh_transibservice.expire || true)"
 updated_at="$(uci -q get nikki.ssh_transibservice.update || true)"

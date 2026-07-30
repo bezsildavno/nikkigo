@@ -130,15 +130,21 @@ Write-Host 'Waiting for SSH...' -ForegroundColor Green
 $remoteCommand = @'
 base_url=$(printf '%s' '__BASE_URL_B64__' | base64 -d) || exit 90
 tmp="/tmp/nikkigo-$$.sh"
+safety="/tmp/nikkigo-safety-$$.sh"
 echo "[NikkiGo] SSH connection established. Downloading the maintenance script..."
 if ! wget -O "$tmp" "$base_url/router-install.sh?nikkigo=$(date +%s)"; then
     echo "[NikkiGo] ERROR: failed to download router-install.sh" >&2
     rm -f "$tmp"
     exit 91
 fi
-NIKKIGO_LANGUAGE='en' NIKKIGO_ROUTER_ADDRESS_B64='__ROUTER_B64__' ash "$tmp"
+if ! wget -O "$safety" "$base_url/router-safety.sh?nikkigo=$(date +%s)"; then
+    echo "[NikkiGo] ERROR: failed to download the safety module" >&2
+    rm -f "$tmp" "$safety"
+    exit 91
+fi
+NIKKIGO_BASE_URL="$base_url" NIKKIGO_SAFETY_PATH="$safety" NIKKIGO_LANGUAGE='en' NIKKIGO_ROUTER_ADDRESS_B64='__ROUTER_B64__' ash "$tmp"
 status=$?
-rm -f "$tmp"
+rm -f "$tmp" "$safety"
 exit "$status"
 '@
 $remoteCommand = $remoteCommand.Replace('__BASE_URL_B64__', $baseUrlB64)

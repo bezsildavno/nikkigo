@@ -173,15 +173,21 @@ base_url_b64="$(printf '%s' "$BASE_URL" | base64 | tr -d '\r\n')"
 remote_command="
 base_url=\$(printf '%s' '$base_url_b64' | base64 -d) || exit 90
 tmp=\"/tmp/nikkigo-\$\$.sh\"
+safety=\"/tmp/nikkigo-safety-\$\$.sh\"
 echo '[NikkiGo] SSH-подключение установлено. Скачивание сценария обслуживания...'
 if ! wget -O \"\$tmp\" \"\$base_url/router-install.sh?nikkigo=\$(date +%s)\"; then
 	echo '[NikkiGo] ОШИБКА: не удалось скачать router-install.sh' >&2
 	rm -f \"\$tmp\"
 	exit 91
 fi
-NIKKIGO_LANGUAGE='ru' NIKKIGO_ROUTER_ADDRESS_B64='$router_b64' ash \"\$tmp\"
+if ! wget -O \"\$safety\" \"\$base_url/router-safety.sh?nikkigo=\$(date +%s)\"; then
+	echo '[NikkiGo] ОШИБКА: не удалось скачать модуль безопасности' >&2
+	rm -f \"\$tmp\" \"\$safety\"
+	exit 91
+fi
+NIKKIGO_BASE_URL=\"\$base_url\" NIKKIGO_SAFETY_PATH=\"\$safety\" NIKKIGO_LANGUAGE='ru' NIKKIGO_ROUTER_ADDRESS_B64='$router_b64' ash \"\$tmp\"
 status=\$?
-rm -f \"\$tmp\"
+rm -f \"\$tmp\" \"\$safety\"
 exit \"\$status\"
 "
 

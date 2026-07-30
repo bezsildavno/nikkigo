@@ -1,0 +1,176 @@
+#!/bin/ash
+
+NIKKIGO_STATE_DIR="${NIKKIGO_STATE_DIR:-/tmp/nikkigo-state-$$}"
+NIKKIGO_CONFIG="${NIKKIGO_CONFIG:-/etc/config/nikki}"
+NIKKIGO_SUBSCRIPTIONS="${NIKKIGO_SUBSCRIPTIONS:-/etc/nikki/subscriptions}"
+NIKKIGO_RUN="${NIKKIGO_RUN:-/etc/nikki/run}"
+NIKKIGO_SERVICE="${NIKKIGO_SERVICE:-/etc/init.d/nikki}"
+NIKKIGO_TRANSACTION=0
+
+safe_log() {
+	printf '[NikkiGo] %s\n' "$*" |
+		sed -E \
+			-e 's#https?://[^[:space:]]+#<URL скрыт>#g' \
+			-e 's#(password|secret|token|key|uuid)[=:][^[:space:]]+#\1=<скрыто>#Ig'
+}
+
+backup_state() {
+	mkdir -p "$NIKKIGO_STATE_DIR"
+	cp -p "$NIKKIGO_CONFIG" "$NIKKIGO_STATE_DIR/nikki.uci" 2>/dev/null || :
+	mkdir -p "$NIKKIGO_STATE_DIR/subscriptions"
+	if [ -d "$NIKKIGO_SUBSCRIPTIONS" ]; then
+		cp -p "$NIKKIGO_SUBSCRIPTIONS"/*.yaml "$NIKKIGO_STATE_DIR/subscriptions/" 2>/dev/null || :
+	fi
+	uci -q get nikki.config.enabled > "$NIKKIGO_STATE_DIR/enabled" 2>/dev/null || printf '0\n' > "$NIKKIGO_STATE_DIR/enabled"
+	if "$NIKKIGO_SERVICE" running >/dev/null 2>&1; then
+		printf '1\n' > "$NIKKIGO_STATE_DIR/running"
+		if health_check; then
+			printf '1\n' > "$NIKKIGO_STATE_DIR/healthy"
+		else
+			printf '0\n' > "$NIKKIGO_STATE_DIR/healthy"
+		fi
+	else
+		printf '0\n' > "$NIKKIGO_STATE_DIR/running"
+		printf '0\n' > "$NIKKIGO_STATE_DIR/healthy"
+	fi
+	NIKKIGO_TRANSACTION=1
+}
+
+enable_fail_open() {
+	"$NIKKIGO_SERVICE" stop >/dev/null 2>&1 || :
+	uci -q set nikki.config.enabled='0'
+	uci -q commit nikki
+	safe_log "Nikki отключён, обычный интернет восстановлен."
+}
+
+restore_state() {
+	enable_fail_open
+	if [ -f "$NIKKIGO_STATE_DIR/nikki.uci" ]; then
+		cp -p "$NIKKIGO_STATE_DIR/nikki.uci" "$NIKKIGO_CONFIG"
+		uci -q revert nikki 2>/dev/null || :
+	fi
+	if [ -d "$NIKKIGO_STATE_DIR/subscriptions" ]; then
+		cp -p "$NIKKIGO_STATE_DIR/subscriptions"/*.yaml "$NIKKIGO_SUBSCRIPTIONS/" 2>/dev/null || :
+	fi
+	if [ "$(cat "$NIKKIGO_STATE_DIR/enabled" 2>/dev/null || printf 0)" = '1' ]; then
+		uci -q set nikki.config.enabled='1'
+		uci -q commit nikki
+		if [ "$(cat "$NIKKIGO_STATE_DIR/running" 2>/dev/null || printf 0)" = '1' ] &&
+			[ "$(cat "$NIKKIGO_STATE_DIR/healthy" 2>/dev/null || printf 0)" = '1' ]; then
+			"$NIKKIGO_SERVICE" restart >/dev/null 2>&1 || enable_fail_open
+		else
+			uci -q set nikki.config.enabled='0'
+			uci -q commit nikki
+			safe_log "Прежнее состояние не прошло health-check и оставлено отключённым."
+		fi
+	fi
+	NIKKIGO_TRANSACTION=0
+	rm -rf "$NIKKIGO_STATE_DIR"
+}
+
+validate_profile() {
+	profile="$1"
+	[ -s "$profile" ] || return 1
+	yq -M -p yaml -o yaml -e \
+		'(has("proxies") or has("proxy-providers")) and has("proxy-groups")' \
+		"$profile" >/dev/null 2>&1 || return 1
+	/usr/bin/mihomo -d "$NIKKIGO_RUN" -t >/dev/null 2>&1
+}
+
+controller_url() {
+	listen="$(yq -r '."external-controller" // ""' "$NIKKIGO_RUN/config.yaml" 2>/dev/null)"
+	port="${listen##*:}"
+	case "$port" in ''|*[!0-9]*) port=9090 ;; esac
+	printf 'http://127.0.0.1:%s' "$port"
+}
+
+select_safe_proxies() {
+	api="$(controller_url)"
+	secret="$(yq -r '.secret // ""' "$NIKKIGO_RUN/config.yaml" 2>/dev/null)"
+	if [ -n "$secret" ]; then
+		curl -fsS --max-time 5 -H "Authorization: Bearer $secret" "$api/proxies" > "$NIKKIGO_STATE_DIR/proxies.json" || return 1
+	else
+		curl -fsS --max-time 5 "$api/proxies" > "$NIKKIGO_STATE_DIR/proxies.json" || return 1
+	fi
+	selector_count="$(yq -r '[.proxies[] | select(.type == "Selector")] | length' "$NIKKIGO_STATE_DIR/proxies.json")"
+	yq -r '.proxies as $all | .proxies | to_entries[] |
+		select(.value.type == "Selector") |
+		[.key, ((.value.all // []) |
+			map(select(($all[.].type == "URLTest") or ($all[.].type == "Fallback")))[0] //
+			map(select(. == "DIRECT"))[0] // "")] | @tsv' \
+		"$NIKKIGO_STATE_DIR/proxies.json" > "$NIKKIGO_STATE_DIR/selections.tsv" 2>/dev/null || return 1
+	choice_count="$(awk -F '\t' '$2 != "" { count++ } END { print count + 0 }' "$NIKKIGO_STATE_DIR/selections.tsv")"
+	[ "$selector_count" = "$choice_count" ] || return 1
+	while IFS="$(printf '\t')" read -r group choice; do
+		[ -n "$group" ] && [ -n "$choice" ] || continue
+		encoded="$(printf '%s' "$group" | od -An -tx1 | tr -d '\n ' | sed 's/../%&/g')"
+		payload="$(printf '%s' "$choice" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+		if [ -n "$secret" ]; then
+			curl -fsS --max-time 5 -H "Authorization: Bearer $secret" -H 'Content-Type: application/json' \
+				-X PUT -d "{\"name\":\"$payload\"}" "$api/proxies/$encoded" >/dev/null || return 1
+		else
+			curl -fsS --max-time 5 -H 'Content-Type: application/json' \
+				-X PUT -d "{\"name\":\"$payload\"}" "$api/proxies/$encoded" >/dev/null || return 1
+		fi
+	done < "$NIKKIGO_STATE_DIR/selections.tsv"
+}
+
+prepare_zashboard() {
+	url="$(uci -q get nikki.mixin.ui_url || :)"
+	if [ -f "$NIKKIGO_RUN/config.yaml" ]; then
+		run_url="$(yq -r '."external-ui-url" // ""' "$NIKKIGO_RUN/config.yaml" 2>/dev/null)"
+		[ -z "$run_url" ] || url="$run_url"
+	fi
+	[ -n "$url" ] || return 1
+	work="$NIKKIGO_STATE_DIR/ui"
+	rm -rf "$work"
+	mkdir -p "$work/unpack"
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL --max-time 120 -o "$work/ui.zip" "$url" || return 1
+	else
+		wget -q -O "$work/ui.zip" "$url" || return 1
+	fi
+	command -v unzip >/dev/null 2>&1 || return 1
+	unzip -t "$work/ui.zip" >/dev/null 2>&1 || return 1
+	unzip -q "$work/ui.zip" -d "$work/unpack" || return 1
+	index="$(find "$work/unpack" -type f -name index.html | head -n 1)"
+	[ -n "$index" ] || return 1
+	printf '%s\n' "${index%/*}" > "$work/source-dir"
+}
+
+ensure_zashboard() {
+	work="$NIKKIGO_STATE_DIR/ui"
+	[ -f "$work/source-dir" ] || prepare_zashboard || return 1
+	source_dir="$(cat "$work/source-dir")"
+	rm -rf "$NIKKIGO_RUN/ui"
+	mkdir -p "$NIKKIGO_RUN/ui"
+	cp -R "$source_dir"/. "$NIKKIGO_RUN/ui/"
+	[ -f "$NIKKIGO_RUN/ui/index.html" ]
+}
+
+health_check() {
+	api="$(controller_url)"
+	secret="$(yq -r '.secret // ""' "$NIKKIGO_RUN/config.yaml" 2>/dev/null)"
+	attempt=1
+	while [ "$attempt" -le 3 ]; do
+		if [ -n "$secret" ]; then
+			api_ok="$(curl -fsS --max-time 5 -H "Authorization: Bearer $secret" "$api/version" >/dev/null 2>&1; printf '%s' "$?")"
+		else
+			api_ok="$(curl -fsS --max-time 5 "$api/version" >/dev/null 2>&1; printf '%s' "$?")"
+		fi
+		"$NIKKIGO_SERVICE" running >/dev/null 2>&1 &&
+			[ "$api_ok" = '0' ] &&
+			nslookup example.com >/dev/null 2>&1 &&
+			curl -fsS --max-time 10 -o /dev/null https://www.gstatic.com/generate_204 &&
+			return 0
+		ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || :
+		sleep 3
+		attempt=$((attempt + 1))
+	done
+	return 1
+}
+
+commit_state() {
+	NIKKIGO_TRANSACTION=0
+	rm -rf "$NIKKIGO_STATE_DIR"
+}

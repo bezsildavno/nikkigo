@@ -1,0 +1,18 @@
+proxies:
+  - name: sudoku
+    type: hysteria2
+    server: 192.0.2.10
+    port: 443
+  - name: trusttunnel
+    type: hysteria2
+    server: 192.0.2.11
+    port: 443
+proxy-groups:
+  - name: outer
+    type: select
+    proxies: [inner]
+  - name: inner
+    type: select
+    proxies: [sudoku, trusttunnel]
+rules:
+  - MATCH,outer

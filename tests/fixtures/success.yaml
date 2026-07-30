@@ -1,0 +1,11 @@
+proxies:
+  - name: node
+    type: socks5
+    server: 192.0.2.30
+    port: 1080
+proxy-groups:
+  - name: proxy
+    type: select
+    proxies: [DIRECT, node]
+rules:
+  - MATCH,proxy
