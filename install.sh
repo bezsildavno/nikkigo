@@ -174,7 +174,7 @@ remote_command="
 base_url=\$(printf '%s' '$base_url_b64' | base64 -d) || exit 90
 tmp=\"/tmp/nikkigo-\$\$.sh\"
 echo '[NikkiGo] SSH-подключение установлено. Скачивание сценария обслуживания...'
-if ! wget -O \"\$tmp\" \"\$base_url/router-install.sh\"; then
+if ! wget -O \"\$tmp\" \"\$base_url/router-install.sh?nikkigo=\$(date +%s)\"; then
 	echo '[NikkiGo] ОШИБКА: не удалось скачать router-install.sh' >&2
 	rm -f \"\$tmp\"
 	exit 91

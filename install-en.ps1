@@ -131,7 +131,7 @@ $remoteCommand = @'
 base_url=$(printf '%s' '__BASE_URL_B64__' | base64 -d) || exit 90
 tmp="/tmp/nikkigo-$$.sh"
 echo "[NikkiGo] SSH connection established. Downloading the maintenance script..."
-if ! wget -O "$tmp" "$base_url/router-install.sh"; then
+if ! wget -O "$tmp" "$base_url/router-install.sh?nikkigo=$(date +%s)"; then
     echo "[NikkiGo] ERROR: failed to download router-install.sh" >&2
     rm -f "$tmp"
     exit 91
