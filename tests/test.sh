@@ -78,6 +78,11 @@ grep -q '\[ "$tested" -lt 8 \]' "$ROOT/router-safety.sh" &&
 	fail 'bounded proxy recovery'
 pass 'bounded proxy recovery'
 
+grep -q 'recovery-first-round.tsv' "$ROOT/router-safety.sh" &&
+	grep -q 'delay-test прошли' "$ROOT/router-safety.sh" ||
+	fail 'round-robin proxy recovery diagnostics'
+pass 'round-robin proxy recovery diagnostics'
+
 grep -q 'Оставшиеся группы будут проверены функционально' "$ROOT/router-safety.sh" &&
 	! grep -q '\[ "$selector_count" = "$choice_count" \]' "$ROOT/router-safety.sh" ||
 	fail 'partial selector preparation is allowed'

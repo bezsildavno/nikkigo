@@ -184,9 +184,23 @@ try_recover_proxies() {
 		select(. != "DIRECT" and . != "REJECT") |
 		[$group, .] | @tsv' \
 		"$NIKKIGO_STATE_DIR/recovery-proxies.json" \
-		> "$NIKKIGO_STATE_DIR/recovery-candidates.tsv" 2>/dev/null || return 1
+		> "$NIKKIGO_STATE_DIR/recovery-candidates-raw.tsv" 2>/dev/null || return 1
+
+	# Round-robin start: try one option from every selector before spending the
+	# bounded budget on additional options from the same group.
+	awk -F '\t' '!seen[$1]++ { print }' \
+		"$NIKKIGO_STATE_DIR/recovery-candidates-raw.tsv" \
+		> "$NIKKIGO_STATE_DIR/recovery-first-round.tsv"
+	awk -F '\t' 'seen[$1]++ { print }' \
+		"$NIKKIGO_STATE_DIR/recovery-candidates-raw.tsv" \
+		> "$NIKKIGO_STATE_DIR/recovery-next-rounds.tsv"
+	cat "$NIKKIGO_STATE_DIR/recovery-first-round.tsv" \
+		"$NIKKIGO_STATE_DIR/recovery-next-rounds.tsv" \
+		> "$NIKKIGO_STATE_DIR/recovery-candidates.tsv"
 
 	tested=0
+	delay_passed=0
+	applied=0
 	while IFS="$(printf '\t')" read -r group candidate; do
 		[ -n "$group" ] && [ -n "$candidate" ] || continue
 		[ "$tested" -lt 8 ] || break
@@ -194,14 +208,17 @@ try_recover_proxies() {
 		encoded="$(url_encode "$candidate")"
 		if api_get "$api/proxies/$encoded/delay?timeout=4000&url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204" \
 			>/dev/null 2>&1; then
+			delay_passed=$((delay_passed + 1))
 			api_select "$api" "$group" "$candidate" || continue
+			applied=$((applied + 1))
 			sleep 1
 			if quick_health_check; then
-				safe_log "Найден работоспособный вариант прокси после автоматической проверки."
+				safe_log "Автоподбор успешен: проверено $tested, delay-test прошли $delay_passed, применено $applied."
 				return 0
 			fi
 		fi
 	done < "$NIKKIGO_STATE_DIR/recovery-candidates.tsv"
+	safe_log "Автоподбор не помог: проверено $tested, delay-test прошли $delay_passed, применено $applied."
 	return 1
 }
 
