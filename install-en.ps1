@@ -136,7 +136,7 @@ if ! wget -O "$tmp" "$base_url/router-install.sh?nikkigo=$(date +%s)"; then
     rm -f "$tmp"
     exit 91
 fi
-NIKKIGO_ROUTER_ADDRESS_B64='__ROUTER_B64__' ash "$tmp"
+NIKKIGO_LANGUAGE='en' NIKKIGO_ROUTER_ADDRESS_B64='__ROUTER_B64__' ash "$tmp"
 status=$?
 rm -f "$tmp"
 exit "$status"

@@ -85,7 +85,7 @@ read_remote_input() {
 
 cleanup() {
 	restore_remote_terminal
-	unset NIKKIGO_ROUTER_ADDRESS_B64 router_address subscription_url action
+	unset NIKKIGO_LANGUAGE NIKKIGO_ROUTER_ADDRESS_B64 router_address subscription_url action
 }
 
 finish() {
@@ -200,6 +200,27 @@ if ! LUCI_I18N=1 wget -qO- "$UPSTREAM_INSTALLER" | ash; then
 fi
 
 [ -x /etc/init.d/nikki ] || fail "NikkiOpen не установился"
+
+if [ "${NIKKIGO_LANGUAGE:-ru}" = 'ru' ]; then
+	CURRENT_STAGE='установка русского языка NikkiOpen'
+	say "Установка русского языка панели NikkiOpen"
+	if [ -x /bin/opkg ]; then
+		if opkg install luci-i18n-nikki-ru; then
+			say "Русский язык панели NikkiOpen установлен."
+		else
+			say "Предупреждение: пакет luci-i18n-nikki-ru недоступен для этой прошивки."
+			say "NikkiOpen установлен и продолжит работать с языком, доступным в LuCI."
+		fi
+	elif [ -x /usr/bin/apk ]; then
+		if apk add luci-i18n-nikki-ru; then
+			say "Русский язык панели NikkiOpen установлен."
+		else
+			say "Предупреждение: пакет luci-i18n-nikki-ru недоступен для этой прошивки."
+			say "NikkiOpen установлен и продолжит работать с языком, доступным в LuCI."
+		fi
+	fi
+fi
+
 say "Автообновление самого пакета upstream не предоставляет."
 say "NikkiGo включит автоматическое обновление подписки."
 
