@@ -12,16 +12,22 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/bezsildavno/nikkigo/main/i
 
 ## Windows PowerShell
 
-Русская версия:
-
-```powershell
-irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install-ru.ps1 | iex
-```
-
-English version:
+Язык определяется автоматически по настройкам Windows:
 
 ```powershell
 irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.ps1 | iex
+```
+
+Принудительно выбрать русский:
+
+```powershell
+$env:NIKKIGO_LANG='ru'; irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.ps1 | iex
+```
+
+Принудительно выбрать английский:
+
+```powershell
+$env:NIKKIGO_LANG='en'; irm https://raw.githubusercontent.com/bezsildavno/nikkigo/main/install.ps1 | iex
 ```
 
 Установщик:

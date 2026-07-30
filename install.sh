@@ -13,6 +13,68 @@ fail() {
 	exit 1
 }
 
+NIKKIGO_TTY_STATE=
+
+restore_terminal() {
+	if [ -n "$NIKKIGO_TTY_STATE" ]; then
+		stty "$NIKKIGO_TTY_STATE" </dev/tty 2>/dev/null || true
+		NIKKIGO_TTY_STATE=
+	fi
+}
+
+cancel_input() {
+	restore_terminal
+	printf '\nОтменено пользователем.\n'
+	exit "${1:-0}"
+}
+
+trap 'cancel_input 130' INT TERM HUP
+
+read_input() {
+	prompt="$1"
+	printf '%s: ' "$prompt"
+
+	if [ ! -t 0 ]; then
+		IFS= read -r REPLY
+		return
+	fi
+
+	NIKKIGO_TTY_STATE="$(stty -g </dev/tty)"
+	stty -icanon -echo min 1 time 0 </dev/tty
+	value=
+
+	while :; do
+		code="$(
+			dd if=/dev/tty bs=1 count=1 2>/dev/null |
+				od -An -tu1 |
+				tr -d ' '
+		)"
+		[ -n "$code" ] || continue
+
+		case "$code" in
+			27) cancel_input 0 ;;
+			3) cancel_input 130 ;;
+			10|13) break ;;
+			8|127)
+				if [ -n "$value" ]; then
+					value="${value%?}"
+					printf '\b \b'
+				fi
+				;;
+			*)
+				octal="$(printf '%03o' "$code")"
+				char="$(printf "\\$octal")"
+				value="${value}${char}"
+				printf '%s' "$char"
+				;;
+		esac
+	done
+
+	restore_terminal
+	printf '\n'
+	REPLY="$value"
+}
+
 command -v ssh >/dev/null 2>&1 || fail "не найден клиент ssh"
 
 default_gateway() {
@@ -56,29 +118,29 @@ say "Значение в [скобках] — стандартное. Чтобы
 say ""
 say "[Шаг 1 из 4] Адрес роутера"
 say "NikkiGo нашёл роутер по адресу $gateway."
-printf 'Нажмите Enter для %s или введите другой адрес: ' "$gateway"
-IFS= read -r router
+read_input "Нажмите Enter для $gateway или введите другой адрес"
+router="$REPLY"
 router="${router:-$gateway}"
 
 say ""
 say "[Шаг 2 из 4] Логин роутера"
 say "На большинстве роутеров OpenWrt используется логин root."
-printf 'Нажмите Enter для root или введите другой логин: '
-IFS= read -r ssh_user
+read_input "Нажмите Enter для root или введите другой логин"
+ssh_user="$REPLY"
 ssh_user="${ssh_user:-root}"
 
 say ""
 say "[Шаг 3 из 4] Порт SSH"
 say "На большинстве роутеров используется порт 22."
-printf 'Нажмите Enter для 22 или введите другой порт: '
-IFS= read -r ssh_port
+read_input "Нажмите Enter для 22 или введите другой порт"
+ssh_port="$REPLY"
 ssh_port="${ssh_port:-22}"
 
 say ""
 say "[Шаг 4 из 4] Подписка"
 say "Вставьте полную ссылку подписки и нажмите Enter."
-printf 'Ссылка на подписку: '
-IFS= read -r subscription
+read_input "Ссылка на подписку"
+subscription="$REPLY"
 [ -n "$subscription" ] || fail "ссылка на подписку не указана"
 
 case "$subscription" in

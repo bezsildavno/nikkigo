@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoOwner = if ($env:NIKKIGO_OWNER) { $env:NIKKIGO_OWNER } else { 'bezsildavno' }
@@ -17,7 +17,7 @@ function Read-NikkiInput([string]$Prompt) {
     if ([Console]::IsInputRedirected) {
         $value = Read-Host $Prompt
         if ($value -eq [string][char]27) {
-            Write-Host 'Отменено пользователем.'
+            Write-Host 'Cancelled by user.'
             exit 0
         }
         return $value
@@ -30,7 +30,7 @@ function Read-NikkiInput([string]$Prompt) {
         switch ($key.Key) {
             'Escape' {
                 Write-Host ''
-                Write-Host 'Отменено пользователем.' -ForegroundColor Yellow
+                Write-Host 'Cancelled by user.' -ForegroundColor Yellow
                 exit 0
             }
             'Enter' {
@@ -54,7 +54,7 @@ function Read-NikkiInput([string]$Prompt) {
 }
 
 if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
-    Stop-WithError 'Не найден клиент OpenSSH. Установите компонент OpenSSH Client в Windows.'
+    Stop-WithError 'OpenSSH Client was not found. Install the Windows OpenSSH Client feature.'
 }
 
 $gateway = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
@@ -66,39 +66,39 @@ if (-not $gateway) {
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
-Write-Host ' NikkiGo — установка Nikki на OpenWrt' -ForegroundColor Cyan
+Write-Host ' NikkiGo - Nikki installer for OpenWrt' -ForegroundColor Cyan
 Write-Host '============================================================' -ForegroundColor Cyan
 Write-Host ''
-Write-Host 'Нужно ответить на четыре простых вопроса.'
-Write-Host 'Чтобы выбрать предложенное значение, просто нажмите Enter.'
+Write-Host 'You will answer four simple questions.'
+Write-Host 'A value in [brackets] is the default. Press Enter to use it.'
 Write-Host ''
 
-Write-Host '[Шаг 1 из 4] Адрес роутера' -ForegroundColor Yellow
-Write-Host "NikkiGo нашёл роутер по адресу $gateway."
-$router = Read-NikkiInput "Нажмите Enter для $gateway или введите другой адрес"
+Write-Host '[Step 1 of 4] Router address' -ForegroundColor Yellow
+Write-Host "NikkiGo found your router at $gateway."
+$router = Read-NikkiInput "Press Enter to use $gateway, or type another address"
 if ([string]::IsNullOrWhiteSpace($router)) { $router = $gateway }
 
 Write-Host ''
-Write-Host '[Шаг 2 из 4] Логин роутера' -ForegroundColor Yellow
-Write-Host 'На большинстве роутеров OpenWrt используется логин root.'
-$sshUser = Read-NikkiInput 'Нажмите Enter для root или введите другой логин'
+Write-Host '[Step 2 of 4] Router login' -ForegroundColor Yellow
+Write-Host 'On most OpenWrt routers the login is root.'
+$sshUser = Read-NikkiInput 'Press Enter to use root, or type another login'
 if ([string]::IsNullOrWhiteSpace($sshUser)) { $sshUser = 'root' }
 
 Write-Host ''
-Write-Host '[Шаг 3 из 4] Порт SSH' -ForegroundColor Yellow
-Write-Host 'На большинстве роутеров используется порт 22.'
-$sshPort = Read-NikkiInput 'Нажмите Enter для 22 или введите другой порт'
+Write-Host '[Step 3 of 4] SSH port' -ForegroundColor Yellow
+Write-Host 'On most routers the SSH port is 22.'
+$sshPort = Read-NikkiInput 'Press Enter to use 22, or type another port'
 if ([string]::IsNullOrWhiteSpace($sshPort)) { $sshPort = '22' }
 if ($sshPort -notmatch '^\d{1,5}$' -or [int]$sshPort -gt 65535) {
-    Stop-WithError 'Указан некорректный порт SSH.'
+    Stop-WithError 'Invalid SSH port.'
 }
 
 Write-Host ''
-Write-Host '[Шаг 4 из 4] Подписка' -ForegroundColor Yellow
-Write-Host 'Вставьте полную ссылку подписки и нажмите Enter.'
-$subscription = Read-NikkiInput 'Ссылка подписки'
+Write-Host '[Step 4 of 4] Subscription' -ForegroundColor Yellow
+Write-Host 'Paste the complete subscription URL and press Enter.'
+$subscription = Read-NikkiInput 'Subscription URL'
 if ($subscription -notmatch '^https?://') {
-    Stop-WithError 'Ссылка должна начинаться с http:// или https://.'
+    Stop-WithError 'The URL must start with http:// or https://.'
 }
 
 $subscriptionB64 = [Convert]::ToBase64String(
@@ -115,24 +115,24 @@ $payload = $null
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
-Write-Host ' ДАЛЬШЕ: вход по SSH' -ForegroundColor Cyan
+Write-Host ' NEXT: SSH login' -ForegroundColor Cyan
 Write-Host '============================================================' -ForegroundColor Cyan
-Write-Host "Сейчас NikkiGo подключится к $sshUser@$router."
+Write-Host "NikkiGo will now connect to $sshUser@$router."
 Write-Host ''
-Write-Host 'Если SSH спросит, доверяете ли вы устройству:' -ForegroundColor Yellow
-Write-Host '  Введите yes и нажмите Enter.'
+Write-Host 'If SSH asks whether you trust the host:' -ForegroundColor Yellow
+Write-Host '  Type yes and press Enter.'
 Write-Host ''
-Write-Host "Когда появится строка $sshUser@$router's password:" -ForegroundColor Yellow
-Write-Host '  Введите ПАРОЛЬ ОТ РОУТЕРА и нажмите Enter.'
-Write-Host '  При вводе не будет видно ничего — ни точек, ни звёздочек.'
-Write-Host '  Это нормально: клавиатура работает, пароль вводится.'
+Write-Host "When you see: $sshUser@$router's password:" -ForegroundColor Yellow
+Write-Host '  Type the ROUTER password and press Enter.'
+Write-Host '  Nothing will appear while you type: no dots and no stars.'
+Write-Host '  This is normal. The keyboard is still working.'
 Write-Host ''
-Write-Host 'Ожидание SSH...' -ForegroundColor Green
+Write-Host 'Waiting for SSH...' -ForegroundColor Green
 $payloadB64 | & ssh -T -p $sshPort "$sshUser@$router" "tr -d '\r\n' | base64 -d | ash"
 $payloadB64 = $null
 if ($LASTEXITCODE -ne 0) {
-    Stop-WithError "Установка завершилась с кодом ошибки $LASTEXITCODE."
+    Stop-WithError "Installation failed with exit code $LASTEXITCODE."
 }
 
 Write-Host ''
-Write-Host 'УСПЕШНО: Nikki настроен и запущен.' -ForegroundColor Green
+Write-Host 'SUCCESS: Nikki is configured and running.' -ForegroundColor Green
