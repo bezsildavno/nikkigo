@@ -11,23 +11,22 @@ $BaseUrl = if ($env:NIKKIGO_BASE_URL) {
 }
 
 function Stop-WithError([string]$Message) {
-    [Console]::Error.WriteLine("ОШИБКА: $Message")
-    Write-Host "Если нужна помощь, напишите в Telegram-бот: $SupportBot" -ForegroundColor Yellow
-    exit 1
+    throw [InvalidOperationException]::new($Message)
 }
 
-trap {
-    [Console]::Error.WriteLine("НЕОЖИДАННАЯ ОШИБКА: $($_.Exception.Message)")
-    Write-Host "Если нужна помощь, напишите в Telegram-бот: $SupportBot" -ForegroundColor Yellow
-    exit 1
+function Test-RouterAddress([string]$Address) {
+    $parsedAddress = $null
+    if ([Net.IPAddress]::TryParse($Address, [ref]$parsedAddress)) {
+        return $parsedAddress.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork
+    }
+    return $Address -match '^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)+$'
 }
 
 function Read-NikkiInput([string]$Prompt) {
     if ([Console]::IsInputRedirected) {
         $value = Read-Host $Prompt
         if ($value -eq [string][char]27) {
-            Write-Host 'Отменено пользователем.'
-            exit 0
+            throw [OperationCanceledException]::new('Отменено пользователем.')
         }
         return $value
     }
@@ -39,8 +38,7 @@ function Read-NikkiInput([string]$Prompt) {
         switch ($key.Key) {
             'Escape' {
                 Write-Host ''
-                Write-Host 'Отменено пользователем.' -ForegroundColor Yellow
-                exit 0
+                throw [OperationCanceledException]::new('Отменено пользователем.')
             }
             'Enter' {
                 Write-Host ''
@@ -87,6 +85,9 @@ Write-Host '[Шаг 1 из 4] Адрес роутера' -ForegroundColor Yellow
 Write-Host "NikkiGo нашёл роутер по адресу $gateway."
 $router = Read-NikkiInput "Нажмите Enter для $gateway или введите другой адрес"
 if ([string]::IsNullOrWhiteSpace($router)) { $router = $gateway }
+if (-not (Test-RouterAddress $router)) {
+    Stop-WithError 'Некорректный адрес роутера. Укажите IPv4-адрес или полное имя устройства.'
+}
 
 Write-Host ''
 Write-Host '[Шаг 2 из 4] Логин роутера' -ForegroundColor Yellow

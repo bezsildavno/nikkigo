@@ -139,6 +139,26 @@ say "NikkiGo нашёл роутер по адресу $gateway."
 read_input "Нажмите Enter для $gateway или введите другой адрес"
 router="$REPLY"
 router="${router:-$gateway}"
+case "$router" in
+	''|*[!a-zA-Z0-9.-]*|.*|*.) fail "некорректный адрес роутера" ;;
+	*.*) ;;
+	*) fail "укажите IPv4-адрес или полное имя роутера" ;;
+esac
+case "$router" in
+	*[!0-9.]*)
+		;;
+	*)
+		if ! printf '%s' "$router" | awk -F. '
+			NF != 4 { exit 1 }
+			{
+				for (i = 1; i <= 4; i++)
+					if ($i !~ /^[0-9]+$/ || $i > 255) exit 1
+			}
+		'; then
+			fail "некорректный IPv4-адрес роутера"
+		fi
+		;;
+esac
 
 say ""
 say "[Шаг 2 из 4] Логин роутера"

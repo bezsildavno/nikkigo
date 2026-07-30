@@ -11,23 +11,22 @@ $BaseUrl = if ($env:NIKKIGO_BASE_URL) {
 }
 
 function Stop-WithError([string]$Message) {
-    [Console]::Error.WriteLine("ERROR: $Message")
-    Write-Host "If you need help, contact Telegram support: $SupportBot" -ForegroundColor Yellow
-    exit 1
+    throw [InvalidOperationException]::new($Message)
 }
 
-trap {
-    [Console]::Error.WriteLine("UNEXPECTED ERROR: $($_.Exception.Message)")
-    Write-Host "If you need help, contact Telegram support: $SupportBot" -ForegroundColor Yellow
-    exit 1
+function Test-RouterAddress([string]$Address) {
+    $parsedAddress = $null
+    if ([Net.IPAddress]::TryParse($Address, [ref]$parsedAddress)) {
+        return $parsedAddress.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork
+    }
+    return $Address -match '^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)+$'
 }
 
 function Read-NikkiInput([string]$Prompt) {
     if ([Console]::IsInputRedirected) {
         $value = Read-Host $Prompt
         if ($value -eq [string][char]27) {
-            Write-Host 'Cancelled by user.'
-            exit 0
+            throw [OperationCanceledException]::new('Cancelled by user.')
         }
         return $value
     }
@@ -39,8 +38,7 @@ function Read-NikkiInput([string]$Prompt) {
         switch ($key.Key) {
             'Escape' {
                 Write-Host ''
-                Write-Host 'Cancelled by user.' -ForegroundColor Yellow
-                exit 0
+                throw [OperationCanceledException]::new('Cancelled by user.')
             }
             'Enter' {
                 Write-Host ''
@@ -87,6 +85,9 @@ Write-Host '[Step 1 of 4] Router address' -ForegroundColor Yellow
 Write-Host "NikkiGo found your router at $gateway."
 $router = Read-NikkiInput "Press Enter to use $gateway, or type another address"
 if ([string]::IsNullOrWhiteSpace($router)) { $router = $gateway }
+if (-not (Test-RouterAddress $router)) {
+    Stop-WithError 'Invalid router address. Use an IPv4 address or a full host name.'
+}
 
 Write-Host ''
 Write-Host '[Step 2 of 4] Router login' -ForegroundColor Yellow

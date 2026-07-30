@@ -1,3 +1,4 @@
+& {
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -26,7 +27,12 @@ try {
     $installer = $installer.TrimStart([char]0xFEFF)
     Invoke-Expression $installer
 } catch {
+    if ($_.Exception -is [OperationCanceledException]) {
+        Write-Host 'NikkiGo cancelled by user.' -ForegroundColor Yellow
+        return
+    }
     [Console]::Error.WriteLine("NikkiGo failed: $($_.Exception.Message)")
     Write-Host "Telegram support: $SupportBot" -ForegroundColor Yellow
-    exit 1
+    return
+}
 }
