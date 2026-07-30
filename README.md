@@ -1,6 +1,6 @@
 # NikkiGo
 
-Интерактивная установка
+Интерактивная установка NikkiOpen из
 [lanetsky/nikkiopen](https://github.com/lanetsky/nikkiopen) на роутер с
 OpenWrt через SSH.
 
@@ -44,6 +44,9 @@ $env:NIKKIGO_LANG='en'; irm https://raw.githubusercontent.com/bezsildavno/nikkig
 
 SSH-пароль не сохраняется и не передаётся установщику: его запрашивает
 системный SSH-клиент.
+
+При ошибке установщик показывает этап и диагностику. Дополнительная помощь:
+Telegram-бот `@transib_service_gena_bot`.
 
 ## Требования
 

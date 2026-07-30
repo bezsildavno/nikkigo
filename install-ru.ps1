@@ -1,6 +1,8 @@
 ﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+$UpstreamUrl = 'https://github.com/lanetsky/nikkiopen'
+$SupportBot = '@transib_service_gena_bot'
 $RepoOwner = if ($env:NIKKIGO_OWNER) { $env:NIKKIGO_OWNER } else { 'bezsildavno' }
 $BaseUrl = if ($env:NIKKIGO_BASE_URL) {
     $env:NIKKIGO_BASE_URL.TrimEnd('/')
@@ -9,7 +11,14 @@ $BaseUrl = if ($env:NIKKIGO_BASE_URL) {
 }
 
 function Stop-WithError([string]$Message) {
-    Write-Error $Message
+    [Console]::Error.WriteLine("ОШИБКА: $Message")
+    Write-Host "Если нужна помощь, напишите в Telegram-бот: $SupportBot" -ForegroundColor Yellow
+    exit 1
+}
+
+trap {
+    [Console]::Error.WriteLine("НЕОЖИДАННАЯ ОШИБКА: $($_.Exception.Message)")
+    Write-Host "Если нужна помощь, напишите в Telegram-бот: $SupportBot" -ForegroundColor Yellow
     exit 1
 }
 
@@ -66,11 +75,12 @@ if (-not $gateway) {
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
-Write-Host ' NikkiGo — установка Nikki на OpenWrt' -ForegroundColor Cyan
+Write-Host ' NikkiGo — установка NikkiOpen на OpenWrt' -ForegroundColor Cyan
 Write-Host '============================================================' -ForegroundColor Cyan
 Write-Host ''
 Write-Host 'Нужно ответить на четыре простых вопроса.'
 Write-Host 'Чтобы выбрать предложенное значение, просто нажмите Enter.'
+Write-Host "Исходный код NikkiOpen: $UpstreamUrl"
 Write-Host ''
 
 Write-Host '[Шаг 1 из 4] Адрес роутера' -ForegroundColor Yellow
@@ -135,4 +145,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ''
-Write-Host 'УСПЕШНО: Nikki настроен и запущен.' -ForegroundColor Green
+Write-Host 'УСПЕШНО: NikkiOpen настроен и запущен.' -ForegroundColor Green

@@ -3,15 +3,32 @@ set -eu
 
 REPO_OWNER="${NIKKIGO_OWNER:-bezsildavno}"
 BASE_URL="${NIKKIGO_BASE_URL:-https://raw.githubusercontent.com/$REPO_OWNER/nikkigo/main}"
+UPSTREAM_URL='https://github.com/lanetsky/nikkiopen'
+SUPPORT_BOT='@transib_service_gena_bot'
+SUPPORT_SHOWN=0
 
 say() {
 	printf '%s\n' "$*"
 }
 
 fail() {
+	SUPPORT_SHOWN=1
 	printf 'Ошибка: %s\n' "$*" >&2
+	printf 'Если нужна помощь, напишите в Telegram-бот: %s\n' "$SUPPORT_BOT" >&2
 	exit 1
 }
+
+finish_local() {
+	status=$?
+	if [ "$status" -ne 0 ] && [ "$SUPPORT_SHOWN" -eq 0 ]; then
+		printf 'NikkiGo завершился с неожиданной ошибкой.\n' >&2
+		printf 'Если нужна помощь, напишите в Telegram-бот: %s\n' "$SUPPORT_BOT" >&2
+	fi
+	trap - 0
+	exit "$status"
+}
+
+trap finish_local 0
 
 NIKKIGO_TTY_STATE=
 
@@ -110,11 +127,12 @@ gateway="$(default_gateway || true)"
 
 say ""
 say "============================================================"
-say " NikkiGo — установка Nikki на OpenWrt"
+say " NikkiGo — установка NikkiOpen на OpenWrt"
 say "============================================================"
 say ""
 say "Нужно ответить на четыре простых вопроса."
 say "Значение в [скобках] — стандартное. Чтобы его выбрать, нажмите Enter."
+say "Исходный код NikkiOpen: $UPSTREAM_URL"
 say ""
 say "[Шаг 1 из 4] Адрес роутера"
 say "NikkiGo нашёл роутер по адресу $gateway."
@@ -185,4 +203,4 @@ printf '%s\n' "$payload_b64" |
 unset payload_b64
 
 say ""
-say "УСПЕШНО: Nikki настроен и запущен."
+say "УСПЕШНО: NikkiOpen настроен и запущен."
