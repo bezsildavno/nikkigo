@@ -8,6 +8,8 @@ NikkiGo or another installation script.
 
 > Back up the router first and keep the SSH session open. A broken proxy or
 > DNS configuration can interrupt internet access for the LAN.
+> By continuing, you acknowledge the project's [disclaimer](DISCLAIMER.md)
+> and accept responsibility for the changes made to the router.
 
 ## Before connecting to the router
 

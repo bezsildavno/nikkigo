@@ -11,6 +11,7 @@ Prefer not to run an installer? See the
 
 NikkiGo is an independent project. See
 [third-party notices and licenses](THIRD_PARTY_NOTICES.md).
+Use of the project is subject to the [disclaimer](DISCLAIMER.md).
 
 ## Linux and macOS
 
