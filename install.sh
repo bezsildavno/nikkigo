@@ -4,7 +4,6 @@ set -eu
 REPO_OWNER="${NIKKIGO_OWNER:-bezsildavno}"
 BASE_URL="${NIKKIGO_BASE_URL:-https://raw.githubusercontent.com/$REPO_OWNER/nikkigo/main}"
 UPSTREAM_URL='https://github.com/lanetsky/nikkiopen'
-SUPPORT_BOT='@transib_service_gena_bot'
 SUPPORT_SHOWN=0
 REMOTE_DETAILS_SHOWN=0
 
@@ -28,7 +27,7 @@ fail() {
 	if [ "$REMOTE_DETAILS_SHOWN" = '1' ]; then
 		exit 1
 	fi
-	printf 'Если нужна помощь, напишите в Telegram-бот: %s\n' "$SUPPORT_BOT" >&2
+	printf 'Обратитесь в поддержку сервиса, у которого вы получили ссылку подписки.\n' >&2
 	printf 'Пришлите скриншот окна от команды запуска до ошибки\n' >&2
 	printf 'или скопируйте и отправьте весь текст из консоли.\n' >&2
 	exit 1
@@ -38,7 +37,7 @@ finish_local() {
 	status=$?
 	if [ "$status" -ne 0 ] && [ "$SUPPORT_SHOWN" -eq 0 ]; then
 		printf 'NikkiGo завершился с неожиданной ошибкой.\n' >&2
-		printf 'Если нужна помощь, напишите в Telegram-бот: %s\n' "$SUPPORT_BOT" >&2
+		printf 'Обратитесь в поддержку сервиса, у которого вы получили ссылку подписки.\n' >&2
 		printf 'Пришлите скриншот окна от команды запуска до ошибки\n' >&2
 		printf 'или скопируйте и отправьте весь текст из консоли.\n' >&2
 	fi
@@ -141,7 +140,12 @@ default_gateway() {
 }
 
 gateway="$(default_gateway || true)"
-[ -n "$gateway" ] || gateway="192.168.1.1"
+if [ -n "$gateway" ]; then
+	gateway_detected=1
+else
+	gateway_detected=0
+	gateway="192.168.1.1"
+fi
 
 say ""
 say "============================================================"
@@ -153,7 +157,12 @@ say "Значение в [скобках] — стандартное. Чтобы
 say "Исходный код Taproom Nikki: $UPSTREAM_URL"
 say ""
 say "[Шаг 1 из 3] Адрес роутера"
-say "NikkiGo нашёл роутер по адресу $gateway."
+if [ "$gateway_detected" -eq 1 ]; then
+	say "NikkiGo нашёл роутер по адресу $gateway."
+else
+	say "NikkiGo не смог автоматически определить адрес роутера."
+	say "Предлагаемый адрес по умолчанию: $gateway."
+fi
 read_input "Нажмите Enter для $gateway или введите другой адрес"
 router="$REPLY"
 router="${router:-$gateway}"

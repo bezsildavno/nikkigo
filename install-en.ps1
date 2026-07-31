@@ -2,7 +2,6 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $UpstreamUrl = 'https://github.com/lanetsky/nikkiopen'
-$SupportBot = '@transib_service_gena_bot'
 $RepoOwner = if ($env:NIKKIGO_OWNER) { $env:NIKKIGO_OWNER } else { 'bezsildavno' }
 $BaseUrl = if ($env:NIKKIGO_BASE_URL) {
     $env:NIKKIGO_BASE_URL.TrimEnd('/')
@@ -76,7 +75,8 @@ if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
 $gateway = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
     Sort-Object RouteMetric, InterfaceMetric |
     Select-Object -First 1 -ExpandProperty NextHop
-if (-not $gateway) {
+$gatewayDetected = -not [string]::IsNullOrWhiteSpace($gateway)
+if (-not $gatewayDetected) {
     $gateway = '192.168.1.1'
 }
 
@@ -91,7 +91,12 @@ Write-Host "Taproom Nikki source: $UpstreamUrl"
 Write-Host ''
 
 Write-Host '[Step 1 of 3] Router address' -ForegroundColor Yellow
-Write-Host "NikkiGo found your router at $gateway."
+if ($gatewayDetected) {
+    Write-Host "NikkiGo found your router at $gateway."
+} else {
+    Write-Host 'NikkiGo could not detect the router address automatically.'
+    Write-Host "Suggested default address: $gateway."
+}
 $router = Read-NikkiInput "Press Enter to use $gateway, or type another address"
 if ([string]::IsNullOrWhiteSpace($router)) { $router = $gateway }
 if (-not (Test-RouterAddress $router)) {

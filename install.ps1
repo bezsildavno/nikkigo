@@ -2,8 +2,6 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$SupportBot = '@transib_service_gena_bot'
-
 function ConvertFrom-NikkiGoBase64([string]$EncodedText) {
     [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($EncodedText))
 }
@@ -50,7 +48,7 @@ try {
             return
         }
         Write-Host (
-            (ConvertFrom-NikkiGoBase64 '0JXRgdC70Lgg0L3Rg9C20L3QsCDQv9C+0LzQvtGJ0YwsINC90LDQv9C40YjQuNGC0LUg0LIgVGVsZWdyYW0t0LHQvtGCOiB7MH0=') -f $SupportBot
+            ConvertFrom-NikkiGoBase64 '0J7QsdGA0LDRgtC40YLQtdGB0Ywg0LIg0L/QvtC00LTQtdGA0LbQutGDINGB0LXRgNCy0LjRgdCwLCDRgyDQutC+0YLQvtGA0L7Qs9C+INCy0Ysg0L/QvtC70YPRh9C40LvQuCDRgdGB0YvQu9C60YMg0L/QvtC00L/QuNGB0LrQuC4='
         ) -ForegroundColor Yellow
         Write-Host (
             ConvertFrom-NikkiGoBase64 '0J/RgNC40YjQu9C40YLQtSDRgdC60YDQuNC90YjQvtGCINGN0YLQvtCz0L4g0L7QutC90LAg0L7RgiDQutC+0LzQsNC90LTRiyDQt9Cw0L/Rg9GB0LrQsCDQtNC+INC+0YjQuNCx0LrQuA=='
@@ -63,7 +61,7 @@ try {
         if ($_.Exception.Message -like '*detailed messages above.*') {
             return
         }
-        Write-Host "Telegram support: $SupportBot" -ForegroundColor Yellow
+        Write-Host 'Contact the subscription provider for support.' -ForegroundColor Yellow
         Write-Host 'Send a screenshot of this window from the launch command through the error,' -ForegroundColor Yellow
         Write-Host 'or copy and send the complete console text.' -ForegroundColor Yellow
     }

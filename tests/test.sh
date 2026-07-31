@@ -133,6 +133,18 @@ grep -q "subscription_name.*sub.csm.transib.services" "$ROOT/router-install.sh" 
 	fail 'provider-aware support routing'
 pass 'provider-aware support routing'
 
+grep -q 'Обратитесь в поддержку сервиса' "$ROOT/install.sh" &&
+	! grep -q 'Telegram-бот' "$ROOT/install.sh" &&
+	! grep -q 'SupportBot' "$ROOT/install.ps1" ||
+	fail 'provider support before subscription domain is known'
+pass 'provider support before subscription domain is known'
+
+grep -q 'не смог автоматически определить адрес роутера' "$ROOT/install.sh" &&
+	grep -q 'Предлагаемый адрес по умолчанию' "$ROOT/install-ru.ps1" &&
+	grep -q 'could not detect the router address automatically' "$ROOT/install-en.ps1" ||
+	fail 'honest router address fallback'
+pass 'honest router address fallback'
+
 grep -q '/etc/init.d/rpcd restart' "$ROOT/router-install.sh" &&
 	grep -q 'ubus -S list luci.nikki' "$ROOT/router-install.sh" ||
 	fail 'LuCI RPC backend registration'

@@ -2,7 +2,6 @@
 Set-StrictMode -Version Latest
 
 $UpstreamUrl = 'https://github.com/lanetsky/nikkiopen'
-$SupportBot = '@transib_service_gena_bot'
 $RepoOwner = if ($env:NIKKIGO_OWNER) { $env:NIKKIGO_OWNER } else { 'bezsildavno' }
 $BaseUrl = if ($env:NIKKIGO_BASE_URL) {
     $env:NIKKIGO_BASE_URL.TrimEnd('/')
@@ -76,7 +75,8 @@ if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
 $gateway = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
     Sort-Object RouteMetric, InterfaceMetric |
     Select-Object -First 1 -ExpandProperty NextHop
-if (-not $gateway) {
+$gatewayDetected = -not [string]::IsNullOrWhiteSpace($gateway)
+if (-not $gatewayDetected) {
     $gateway = '192.168.1.1'
 }
 
@@ -91,7 +91,12 @@ Write-Host "Исходный код Taproom Nikki: $UpstreamUrl"
 Write-Host ''
 
 Write-Host '[Шаг 1 из 3] Адрес роутера' -ForegroundColor Yellow
-Write-Host "NikkiGo нашёл роутер по адресу $gateway."
+if ($gatewayDetected) {
+    Write-Host "NikkiGo нашёл роутер по адресу $gateway."
+} else {
+    Write-Host 'NikkiGo не смог автоматически определить адрес роутера.'
+    Write-Host "Предлагаемый адрес по умолчанию: $gateway."
+}
 $router = Read-NikkiInput "Нажмите Enter для $gateway или введите другой адрес"
 if ([string]::IsNullOrWhiteSpace($router)) { $router = $gateway }
 if (-not (Test-RouterAddress $router)) {
