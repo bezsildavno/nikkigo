@@ -161,9 +161,9 @@ pass 'explicit risk acknowledgement'
 
 grep -q 'trap cancel_remote INT TERM' "$ROOT/router-install.sh" &&
 	grep -q 'exit 0' "$ROOT/router-install.sh" &&
-	grep -q "existing_support_host.*sub.csm.transib.services" "$ROOT/router-install.sh" ||
-	fail 'clean cancellation and existing-provider detection'
-pass 'clean cancellation and existing-provider detection'
+	! grep -q 'existing_support_host' "$ROOT/router-install.sh" ||
+	fail 'clean cancellation without stale provider detection'
+pass 'clean cancellation without stale provider detection'
 
 grep -q 'Операция отменена. Изменения не внесены.' "$ROOT/router-install.sh" &&
 	grep -q '\[ "$REPLY" != '\''322'\'' \]' "$ROOT/install.sh" &&
@@ -198,6 +198,12 @@ package_check_line="$(grep -n 'Taproom Nikki не установился' "$ROOT
 [ "$patch_call_line" -gt "$package_check_line" ] ||
 	fail 'watchdog patch must run after package installation'
 pass 'idempotent Nikki watchdog patch'
+
+grep -q '\[ ! -f "$WATCHDOG" \]' "$ROOT/router-install.sh" &&
+	grep -q 'патч watchdog не требуется' "$ROOT/router-install.sh" &&
+	! grep -q 'после установки не найден.*WATCHDOG' "$ROOT/router-install.sh" ||
+	fail 'missing upstream watchdog is optional'
+pass 'missing upstream watchdog is optional'
 
 grep -q 'uplink_available' "$ROOT/router-safety.sh" &&
 	grep -q 'ip -4 route show default' "$ROOT/router-safety.sh" &&

@@ -206,8 +206,10 @@ patch_nikki_watchdog() {
 	WATCHDOG_BACKUP="${WATCHDOG}.nikkigo.bak"
 	WATCHDOG_PREPATCH="$NIKKIGO_STATE_DIR/nikki-watchdog.prepatch"
 
-	[ -f "$WATCHDOG" ] ||
-		fail "после установки не найден $WATCHDOG"
+	if [ ! -f "$WATCHDOG" ]; then
+		say "Предупреждение: $WATCHDOG отсутствует в установленной версии; патч watchdog не требуется."
+		return 0
+	fi
 
 	NEED_PATCH=1
 	NEED_UPLINK=1
@@ -299,16 +301,6 @@ CURRENT_STAGE='определение адреса панели управлен
 [ -n "${NIKKIGO_ROUTER_ADDRESS:-}" ] || fail "не передан адрес роутера"
 router_address="$NIKKIGO_ROUTER_ADDRESS"
 unset NIKKIGO_ROUTER_ADDRESS
-
-existing_support_url="$(uci -q get nikki.ssh_transibservice.url 2>/dev/null || :)"
-existing_support_host="${existing_support_url#*://}"
-existing_support_host="${existing_support_host%%/*}"
-existing_support_host="${existing_support_host%%\?*}"
-existing_support_host="${existing_support_host%%\#*}"
-if [ "$existing_support_host" = 'sub.csm.transib.services' ]; then
-	SUPPORT_MODE='transib'
-fi
-unset existing_support_url existing_support_host
 
 CURRENT_STAGE='проверка доступа к GitHub'
 say "Проверка соединения с GitHub"
