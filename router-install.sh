@@ -32,8 +32,23 @@ fi
 }
 . "$NIKKIGO_SAFETY_PATH"
 
+NIKKIGO_INSTALL_LOG='/var/log/nikkigo-install.log'
+umask 077
+if [ -f "$NIKKIGO_INSTALL_LOG" ]; then
+	cp -p "$NIKKIGO_INSTALL_LOG" "${NIKKIGO_INSTALL_LOG}.previous" 2>/dev/null || :
+fi
+: > "$NIKKIGO_INSTALL_LOG" 2>/dev/null || NIKKIGO_INSTALL_LOG='/tmp/nikkigo-install.log'
+: > "$NIKKIGO_INSTALL_LOG" 2>/dev/null || NIKKIGO_INSTALL_LOG=
+
+record_log() {
+	[ -n "$NIKKIGO_INSTALL_LOG" ] || return 0
+	printf '%s [NikkiGo] %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date)" "$*" |
+		redact_stream >> "$NIKKIGO_INSTALL_LOG" 2>/dev/null || :
+}
+
 say() {
 	message="$*"
+	record_log "$message"
 	color="$C_CYAN"
 	case "$message" in
 		Ошибка:*|*"не удалось"*|*"не пройдена"*) color="$C_RED" ;;
@@ -52,9 +67,12 @@ show_support() {
 	fi
 	say "Пришлите скриншот текущего окна от команды запуска до ошибки"
 	say "или скопируйте и отправьте весь текст из консоли."
+	[ -z "$NIKKIGO_INSTALL_LOG" ] ||
+		say "Дополнительный журнал на роутере: $NIKKIGO_INSTALL_LOG"
 }
 
 fail() {
+	record_log "Ошибка: $*"
 	printf '%s[NikkiGo] Ошибка: %s%s\n' "$C_RED$C_BOLD" "$*" "$C_RESET" >&2
 	show_diagnostics 1 >&2
 	show_support >&2
@@ -184,13 +202,18 @@ read_remote_input() {
 patch_nikki_watchdog() {
 	WATCHDOG='/usr/sbin/nikki-watchdog'
 	PATCH_LINE='[ "$(uci -q get nikki.config.enabled)" = "1" ] || { rm -f /tmp/nikki-watchdog.failures; exit 0; }'
+	UPLINK_LINE='{ ip -4 route show default 2>/dev/null; ip -6 route show default 2>/dev/null; } | grep -q "^default" || { rm -f /tmp/nikki-watchdog.failures; exit 0; }'
 	WATCHDOG_BACKUP="${WATCHDOG}.nikkigo.bak"
 	WATCHDOG_PREPATCH="$NIKKIGO_STATE_DIR/nikki-watchdog.prepatch"
 
 	[ -f "$WATCHDOG" ] ||
 		fail "после установки не найден $WATCHDOG"
 
-	if grep -Fq "$PATCH_LINE" "$WATCHDOG"; then
+	NEED_PATCH=1
+	NEED_UPLINK=1
+	grep -Fq "$PATCH_LINE" "$WATCHDOG" && NEED_PATCH=0
+	grep -Fq "$UPLINK_LINE" "$WATCHDOG" && NEED_UPLINK=0
+	if [ "$NEED_PATCH" = '0' ] && [ "$NEED_UPLINK" = '0' ]; then
 		chmod +x "$WATCHDOG" ||
 			fail "не удалось восстановить право запуска $WATCHDOG"
 		sh -n "$WATCHDOG" ||
@@ -209,9 +232,15 @@ patch_nikki_watchdog() {
 	cp -p "$WATCHDOG" "$WATCHDOG_PREPATCH" ||
 		fail "не удалось создать временную резервную копию $WATCHDOG"
 
-	if ! sed -i "1a\\$PATCH_LINE" "$WATCHDOG" ||
-		! chmod +x "$WATCHDOG" ||
-		! sh -n "$WATCHDOG"; then
+	patch_ok=1
+	if [ "$NEED_PATCH" = '1' ]; then
+		sed -i "1a\\$UPLINK_LINE" "$WATCHDOG" &&
+			sed -i "1a\\$PATCH_LINE" "$WATCHDOG" || patch_ok=0
+	elif [ "$NEED_UPLINK" = '1' ]; then
+		sed -i "2a\\$UPLINK_LINE" "$WATCHDOG" || patch_ok=0
+	fi
+	if [ "$patch_ok" != '1' ] ||
+		! chmod +x "$WATCHDOG" || ! sh -n "$WATCHDOG"; then
 		cp -p "$WATCHDOG_PREPATCH" "$WATCHDOG" || true
 		fail "ошибка изменения nikki-watchdog; восстановлена копия"
 	fi
@@ -252,8 +281,19 @@ CURRENT_STAGE='проверка прав и совместимости роут�
 [ "$(id -u)" = '0' ] || fail "требуются права root"
 [ -r /etc/openwrt_release ] || fail "устройство не похоже на OpenWrt"
 [ -x /sbin/fw4 ] || fail "Nikki требует OpenWrt с firewall4"
-command -v uci >/dev/null 2>&1 || fail "не найден uci"
-command -v wget >/dev/null 2>&1 || fail "не найден wget"
+[ -x /sbin/procd ] || fail "не найден procd; эта прошивка несовместима с установщиком"
+for required_command in ash uci ubus sed grep awk cp df wget; do
+	command -v "$required_command" >/dev/null 2>&1 ||
+		fail "не найдена обязательная команда: $required_command"
+done
+if [ ! -x /bin/opkg ] && [ ! -x /usr/bin/apk ]; then
+	fail "не найден поддерживаемый менеджер пакетов opkg или apk"
+fi
+memory_available_kb="$(awk '$1 == "MemAvailable:" { print $2; exit }' /proc/meminfo 2>/dev/null || :)"
+case "$memory_available_kb" in ''|*[!0-9]*) memory_available_kb=0 ;; esac
+if [ "$memory_available_kb" -gt 0 ] && [ "$memory_available_kb" -lt 65536 ]; then
+	say "Предупреждение: доступно меньше 64 МБ RAM; установка или запуск ядра могут завершиться ошибкой."
+fi
 
 CURRENT_STAGE='определение адреса панели управления'
 [ -n "${NIKKIGO_ROUTER_ADDRESS:-}" ] || fail "не передан адрес роутера"
@@ -617,6 +657,8 @@ say "1. Откройте обычную веб-панель роутера."
 say "2. После установки заново войдите в LuCI."
 say "3. Перейдите: Сервисы → Nikki."
 say "4. Нажмите «Открыть панель»."
+[ -z "$NIKKIGO_INSTALL_LOG" ] ||
+	say "Журнал последней установки для поддержки: $NIKKIGO_INSTALL_LOG"
 if [ "${LUCI_BACKEND_READY:-0}" = '0' ]; then
 	say "Если страница показывает «No related RPC reply», выйдите из LuCI,"
 	say "войдите снова и обновите страницу через Ctrl+F5."

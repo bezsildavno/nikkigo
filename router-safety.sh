@@ -185,8 +185,39 @@ quick_health_check() {
 	api="$(controller_url)"
 	"$NIKKIGO_SERVICE" running >/dev/null 2>&1 || return 1
 	api_get "$api/version" >/dev/null 2>&1 || return 1
-	nslookup example.com >/dev/null 2>&1 || return 1
-	curl -fsS --max-time 8 -o /dev/null https://www.gstatic.com/generate_204
+	uplink_available || return 1
+	dns_available || return 1
+	https_available
+}
+
+uplink_available() {
+	if command -v ip >/dev/null 2>&1; then
+		{
+			ip -4 route show default 2>/dev/null || :
+			ip -6 route show default 2>/dev/null || :
+		} | grep -q '^default'
+		return
+	fi
+	[ -r /proc/net/route ] &&
+		awk '$2 == "00000000" && $4 != "0000" { found=1 } END { exit !found }' /proc/net/route
+}
+
+dns_available() {
+	targets="$(uci -q get nikkigo.health.dns_targets 2>/dev/null || :)"
+	targets="${targets:-example.com cloudflare.com}"
+	for target in $targets; do
+		nslookup "$target" >/dev/null 2>&1 && return 0
+	done
+	return 1
+}
+
+https_available() {
+	targets="$(uci -q get nikkigo.health.https_targets 2>/dev/null || :)"
+	targets="${targets:-https://www.gstatic.com/generate_204 https://cp.cloudflare.com/generate_204}"
+	for target in $targets; do
+		curl -fsS --max-time 8 -o /dev/null "$target" >/dev/null 2>&1 && return 0
+	done
+	return 1
 }
 
 try_recover_proxies() {
@@ -273,7 +304,7 @@ health_check() {
 	attempt=1
 	while [ "$attempt" -le 3 ]; do
 		quick_health_check && return 0
-		ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || :
+		uplink_available || return 1
 		sleep 3
 		attempt=$((attempt + 1))
 	done

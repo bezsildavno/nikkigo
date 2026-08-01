@@ -185,6 +185,7 @@ pass 'base64-free router bootstrap'
 
 watchdog_patch='[ "$(uci -q get nikki.config.enabled)" = "1" ] || { rm -f /tmp/nikki-watchdog.failures; exit 0; }'
 grep -Fq "PATCH_LINE='$watchdog_patch'" "$ROOT/router-install.sh" &&
+	grep -q "UPLINK_LINE=" "$ROOT/router-install.sh" &&
 	grep -q 'grep -Fq "$PATCH_LINE" "$WATCHDOG"' "$ROOT/router-install.sh" &&
 	grep -q 'cp -p "$WATCHDOG" "$WATCHDOG_BACKUP"' "$ROOT/router-install.sh" &&
 	grep -Fq 'sed -i "1a\\$PATCH_LINE" "$WATCHDOG"' "$ROOT/router-install.sh" &&
@@ -197,3 +198,28 @@ package_check_line="$(grep -n 'Taproom Nikki не установился' "$ROOT
 [ "$patch_call_line" -gt "$package_check_line" ] ||
 	fail 'watchdog patch must run after package installation'
 pass 'idempotent Nikki watchdog patch'
+
+grep -q 'uplink_available' "$ROOT/router-safety.sh" &&
+	grep -q 'ip -4 route show default' "$ROOT/router-safety.sh" &&
+	grep -q 'ip -6 route show default' "$ROOT/router-safety.sh" &&
+	grep -q 'dns_targets' "$ROOT/router-safety.sh" &&
+	grep -q 'https_targets' "$ROOT/router-safety.sh" &&
+	! grep -q 'ping .*1\.1\.1\.1' "$ROOT/router-safety.sh" ||
+	fail 'model-independent multi-target health checks'
+pass 'model-independent multi-target health checks'
+
+grep -q '\[ -x /sbin/procd \]' "$ROOT/router-install.sh" &&
+	grep -q 'for required_command in ash uci ubus sed grep awk cp df wget' "$ROOT/router-install.sh" &&
+	grep -q 'MemAvailable:' "$ROOT/router-install.sh" &&
+	grep -q 'opkg или apk' "$ROOT/router-install.sh" ||
+	fail 'feature detection before changes'
+pass 'feature detection before changes'
+
+grep -q "NIKKIGO_INSTALL_LOG='/var/log/nikkigo-install.log'" "$ROOT/router-install.sh" &&
+	grep -q 'redact_stream >> "$NIKKIGO_INSTALL_LOG"' "$ROOT/router-install.sh" &&
+	grep -q 'NIKKIGO_INSTALL_LOG}.previous' "$ROOT/router-install.sh" &&
+	grep -q 'Журнал последней установки для поддержки' "$ROOT/router-install.sh" ||
+	fail 'compact support log for last installation'
+! grep -q 'mountd\|/mnt/sda1\|/dev/sda1\|GL-MT6000\|GL\.iNet' "$ROOT/router-install.sh" ||
+	fail 'installer must not depend on a router model or storage path'
+pass 'compact support log for last installation'
