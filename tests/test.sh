@@ -182,3 +182,18 @@ pass 'service restart output handling'
 	! grep -q 'base64' "$ROOT/router-install.sh" ||
 	fail 'router bootstrap must not require base64'
 pass 'base64-free router bootstrap'
+
+watchdog_patch='[ "$(uci -q get nikki.config.enabled)" = "1" ] || { rm -f /tmp/nikki-watchdog.failures; exit 0; }'
+grep -Fq "PATCH_LINE='$watchdog_patch'" "$ROOT/router-install.sh" &&
+	grep -q 'grep -Fq "$PATCH_LINE" "$WATCHDOG"' "$ROOT/router-install.sh" &&
+	grep -q 'cp -p "$WATCHDOG" "$WATCHDOG_BACKUP"' "$ROOT/router-install.sh" &&
+	grep -Fq 'sed -i "1a\\$PATCH_LINE" "$WATCHDOG"' "$ROOT/router-install.sh" &&
+	grep -q 'chmod +x "$WATCHDOG"' "$ROOT/router-install.sh" &&
+	grep -q 'sh -n "$WATCHDOG"' "$ROOT/router-install.sh" &&
+	grep -q 'cp -p "$WATCHDOG_PREPATCH" "$WATCHDOG"' "$ROOT/router-install.sh" ||
+	fail 'idempotent Nikki watchdog patch'
+patch_call_line="$(grep -n '^patch_nikki_watchdog$' "$ROOT/router-install.sh" | tail -n 1 | cut -d: -f1)"
+package_check_line="$(grep -n 'Taproom Nikki не установился' "$ROOT/router-install.sh" | head -n 1 | cut -d: -f1)"
+[ "$patch_call_line" -gt "$package_check_line" ] ||
+	fail 'watchdog patch must run after package installation'
+pass 'idempotent Nikki watchdog patch'

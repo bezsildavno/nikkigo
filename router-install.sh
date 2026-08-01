@@ -181,6 +181,45 @@ read_remote_input() {
 	REPLY="$value"
 }
 
+patch_nikki_watchdog() {
+	WATCHDOG='/usr/sbin/nikki-watchdog'
+	PATCH_LINE='[ "$(uci -q get nikki.config.enabled)" = "1" ] || { rm -f /tmp/nikki-watchdog.failures; exit 0; }'
+	WATCHDOG_BACKUP="${WATCHDOG}.nikkigo.bak"
+	WATCHDOG_PREPATCH="$NIKKIGO_STATE_DIR/nikki-watchdog.prepatch"
+
+	[ -f "$WATCHDOG" ] ||
+		fail "после установки не найден $WATCHDOG"
+
+	if grep -Fq "$PATCH_LINE" "$WATCHDOG"; then
+		chmod +x "$WATCHDOG" ||
+			fail "не удалось восстановить право запуска $WATCHDOG"
+		sh -n "$WATCHDOG" ||
+			fail "ранее изменённый $WATCHDOG не прошёл проверку синтаксиса"
+		say "Защита nikki-watchdog уже установлена; повторное изменение не требуется."
+		return 0
+	fi
+
+	[ "$(sed -n '1p' "$WATCHDOG")" = '#!/bin/sh' ] ||
+		fail "$WATCHDOG не начинается с #!/bin/sh; безопасное изменение невозможно"
+
+	if [ ! -e "$WATCHDOG_BACKUP" ]; then
+		cp -p "$WATCHDOG" "$WATCHDOG_BACKUP" ||
+			fail "не удалось создать исходную резервную копию $WATCHDOG_BACKUP"
+	fi
+	cp -p "$WATCHDOG" "$WATCHDOG_PREPATCH" ||
+		fail "не удалось создать временную резервную копию $WATCHDOG"
+
+	if ! sed -i "1a\\$PATCH_LINE" "$WATCHDOG" ||
+		! chmod +x "$WATCHDOG" ||
+		! sh -n "$WATCHDOG"; then
+		cp -p "$WATCHDOG_PREPATCH" "$WATCHDOG" || true
+		fail "ошибка изменения nikki-watchdog; восстановлена копия"
+	fi
+
+	rm -f "$WATCHDOG_PREPATCH"
+	say "nikki-watchdog защищён от запуска при выключенном Nikki."
+}
+
 cleanup() {
 	restore_remote_terminal
 	unset NIKKIGO_LANGUAGE NIKKIGO_ROUTER_ADDRESS router_address subscription_url action
@@ -334,6 +373,10 @@ if [ "$upstream_status" -ne 0 ]; then
 fi
 
 [ -x /etc/init.d/nikki ] || fail "Taproom Nikki не установился"
+
+CURRENT_STAGE='защита nikki-watchdog при выключенном Nikki'
+say "Настройка nikki-watchdog"
+patch_nikki_watchdog
 
 CURRENT_STAGE='регистрация панели Taproom Nikki в LuCI'
 say "Регистрация панели Taproom Nikki в LuCI"
