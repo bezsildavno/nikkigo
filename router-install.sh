@@ -464,6 +464,12 @@ if [ "${NIKKIGO_LANGUAGE:-ru}" = 'ru' ]; then
 fi
 
 if [ "$action" = 'update_only' ]; then
+	CURRENT_STAGE='настройка Zashboard после обновления Taproom Nikki'
+	if ensure_zashboard; then
+		say "Zashboard обновлён; автообновление ядра и панели, а также отключение UDP-idle включены по умолчанию."
+	else
+		say "Предупреждение: настройки Zashboard применить не удалось; обновление Taproom Nikki продолжено."
+	fi
 	CURRENT_STAGE='восстановление настроек после обновления Taproom Nikki'
 	say "Восстановление прежних настроек и состояния Nikki"
 	if ! restore_after_package_update; then
@@ -595,6 +601,7 @@ validate_profile /etc/nikki/run/config.yaml ||
 CURRENT_STAGE='подготовка панели Zashboard'
 if ensure_zashboard; then
 	say "Панель Zashboard подготовлена: /etc/nikki/run/ui/index.html"
+	say "В Zashboard по умолчанию включены автообновление ядра и панели, а также отключение UDP-idle."
 else
 	say "Zashboard пока не загружен; повторная попытка будет после проверки интернета."
 fi

@@ -329,7 +329,21 @@ ensure_zashboard() {
 	rm -rf "$NIKKIGO_RUN/ui"
 	mkdir -p "$NIKKIGO_RUN/ui"
 	cp -R "$source_dir"/. "$NIKKIGO_RUN/ui/"
-	[ -f "$NIKKIGO_RUN/ui/index.html" ]
+	[ -f "$NIKKIGO_RUN/ui/index.html" ] || return 1
+	configure_zashboard_defaults "$NIKKIGO_RUN/ui/index.html"
+}
+
+configure_zashboard_defaults() {
+	index_file="$1"
+	marker='id="nikkigo-defaults"'
+	grep -Fq "$marker" "$index_file" && return 0
+	bootstrap='<script id="nikkigo-defaults">(()=>{const d={"config/check-upgrade-core":"true","config/auto-upgrade-core":"true","config/auto-upgrade":"true","config/auto-disconnect-idle-udp":"true"};for(const k in d)if(localStorage.getItem(k)===null)localStorage.setItem(k,d[k])})()</script>'
+	if grep -Fq '</head>' "$index_file"; then
+		sed -i "s#</head>#$bootstrap</head>#" "$index_file" || return 1
+	else
+		sed -i "1a\\$bootstrap" "$index_file" || return 1
+	fi
+	grep -Fq "$marker" "$index_file"
 }
 
 health_check() {

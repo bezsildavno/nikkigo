@@ -23,6 +23,8 @@ for layout in ui-root ui-dist; do
 		ensure_zashboard
 	)
 	[ -f "$run/ui/index.html" ] || fail "$layout normalization"
+	grep -q 'id="nikkigo-defaults"' "$run/ui/index.html" ||
+		fail "$layout Zashboard defaults"
 	pass "$layout normalization"
 done
 
@@ -241,3 +243,11 @@ subscription_prompt_line="$(grep -n "CURRENT_STAGE='ввод ссылки под
 [ "$package_only_line" -lt "$subscription_prompt_line" ] ||
 	fail 'package-only update must exit before subscription prompt'
 pass 'package-only update action'
+
+grep -q 'config/auto-upgrade-core' "$ROOT/router-safety.sh" &&
+	grep -q 'config/auto-upgrade' "$ROOT/router-safety.sh" &&
+	grep -q 'config/auto-disconnect-idle-udp' "$ROOT/router-safety.sh" &&
+	grep -q 'localStorage.getItem(k)===null' "$ROOT/router-safety.sh" &&
+	grep -q 'id="nikkigo-defaults"' "$ROOT/router-safety.sh" ||
+	fail 'non-destructive Zashboard defaults'
+pass 'non-destructive Zashboard defaults'
