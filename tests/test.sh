@@ -223,3 +223,15 @@ grep -q "NIKKIGO_INSTALL_LOG='/var/log/nikkigo-install.log'" "$ROOT/router-insta
 ! grep -q 'mountd\|/mnt/sda1\|/dev/sda1\|GL-MT6000\|GL\.iNet' "$ROOT/router-install.sh" ||
 	fail 'installer must not depend on a router model or storage path'
 pass 'compact support log for last installation'
+
+grep -q '0 — только обновить Taproom Nikki' "$ROOT/router-install.sh" &&
+	grep -q "0) action='update_only'" "$ROOT/router-install.sh" &&
+	grep -q "\[ \"\$action\" = 'update_only' \]" "$ROOT/router-install.sh" &&
+	grep -q 'restore_after_package_update' "$ROOT/router-install.sh" &&
+	grep -q 'Подписки и настройки не изменены' "$ROOT/router-install.sh" ||
+	fail 'package-only update action'
+package_only_line="$(grep -n "\[ \"\$action\" = 'update_only' \]" "$ROOT/router-install.sh" | tail -n 1 | cut -d: -f1)"
+subscription_prompt_line="$(grep -n "CURRENT_STAGE='ввод ссылки подписки'" "$ROOT/router-install.sh" | head -n 1 | cut -d: -f1)"
+[ "$package_only_line" -lt "$subscription_prompt_line" ] ||
+	fail 'package-only update must exit before subscription prompt'
+pass 'package-only update action'

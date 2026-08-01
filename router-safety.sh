@@ -99,6 +99,38 @@ restore_state() {
 	rm -rf "$NIKKIGO_STATE_DIR"
 }
 
+restore_after_package_update() {
+	if [ -x "$NIKKIGO_SERVICE" ]; then
+		"$NIKKIGO_SERVICE" stop >/dev/null 2>&1 || :
+	fi
+	if [ -f "$NIKKIGO_STATE_DIR/nikki.uci" ]; then
+		cp -p "$NIKKIGO_STATE_DIR/nikki.uci" "$NIKKIGO_CONFIG" || return 1
+		uci -q revert nikki 2>/dev/null || :
+	fi
+	if [ -d "$NIKKIGO_STATE_DIR/subscriptions" ]; then
+		mkdir -p "$NIKKIGO_SUBSCRIPTIONS" || return 1
+		cp -p "$NIKKIGO_STATE_DIR/subscriptions"/*.yaml "$NIKKIGO_SUBSCRIPTIONS/" 2>/dev/null || :
+	fi
+	saved_enabled="$(cat "$NIKKIGO_STATE_DIR/enabled" 2>/dev/null || printf 0)"
+	saved_running="$(cat "$NIKKIGO_STATE_DIR/running" 2>/dev/null || printf 0)"
+	if [ "$saved_enabled" = '1' ]; then
+		uci -q set nikki.config.enabled='1' || return 1
+		uci -q commit nikki || return 1
+		if [ "$saved_running" = '1' ]; then
+			"$NIKKIGO_SERVICE" restart >/dev/null 2>&1 || {
+				enable_fail_open
+				return 1
+			}
+		fi
+	else
+		uci -q set nikki.config.enabled='0' 2>/dev/null || :
+		uci -q commit nikki 2>/dev/null || :
+	fi
+	NIKKIGO_TRANSACTION=0
+	rm -rf "$NIKKIGO_STATE_DIR"
+	return 0
+}
+
 validate_profile() {
 	profile="$1"
 	[ -s "$profile" ] || return 1

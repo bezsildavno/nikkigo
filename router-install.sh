@@ -324,12 +324,14 @@ if [ -x /etc/init.d/nikki ]; then
 		installed_version=
 	fi
 	say "Taproom Nikki уже установлен${installed_version:+, версия $installed_version}."
+	say "0 — только обновить Taproom Nikki"
 	say "1 — обновить Taproom Nikki и настроить подписку"
 	say "2 — удалить Taproom Nikki и его конфигурацию"
 	say "3 — выйти без изменений"
 	read_remote_input "Выберите действие [1]"
 	action="${REPLY:-1}"
 	case "$action" in
+		0) action='update_only' ;;
 		1) action='update' ;;
 		2) action='remove' ;;
 		3) say "Выход без изменений."; exit 0 ;;
@@ -385,7 +387,7 @@ else
 fi
 
 CURRENT_STAGE="${action} Taproom Nikki и зависимостей"
-if [ "$action" = 'update' ]; then
+if [ "$action" = 'update' ] || [ "$action" = 'update_only' ]; then
 	say "Обновление Taproom Nikki из $UPSTREAM_REPOSITORY"
 else
 	say "Установка Taproom Nikki из $UPSTREAM_REPOSITORY"
@@ -467,6 +469,18 @@ if [ "${NIKKIGO_LANGUAGE:-ru}" = 'ru' ]; then
 			say "Taproom Nikki установлен и продолжит работать с языком, доступным в LuCI."
 		fi
 	fi
+fi
+
+if [ "$action" = 'update_only' ]; then
+	CURRENT_STAGE='восстановление настроек после обновления Taproom Nikki'
+	say "Восстановление прежних настроек и состояния Nikki"
+	if ! restore_after_package_update; then
+		fail "Taproom Nikki обновлён, но прежнее состояние не удалось безопасно восстановить"
+	fi
+	say "Taproom Nikki обновлён. Подписки и настройки не изменены."
+	[ -z "$NIKKIGO_INSTALL_LOG" ] ||
+		say "Журнал последнего обновления для поддержки: $NIKKIGO_INSTALL_LOG"
+	exit 0
 fi
 
 say "Автообновление самого пакета upstream не предоставляет."
