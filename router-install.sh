@@ -183,7 +183,7 @@ read_remote_input() {
 
 cleanup() {
 	restore_remote_terminal
-	unset NIKKIGO_LANGUAGE NIKKIGO_ROUTER_ADDRESS_B64 router_address subscription_url action
+	unset NIKKIGO_LANGUAGE NIKKIGO_ROUTER_ADDRESS router_address subscription_url action
 }
 
 finish() {
@@ -217,12 +217,9 @@ command -v uci >/dev/null 2>&1 || fail "не найден uci"
 command -v wget >/dev/null 2>&1 || fail "не найден wget"
 
 CURRENT_STAGE='определение адреса панели управления'
-[ -n "${NIKKIGO_ROUTER_ADDRESS_B64:-}" ] || fail "не передан адрес роутера"
-router_address="$(
-	printf '%s' "$NIKKIGO_ROUTER_ADDRESS_B64" |
-		base64 -d 2>/dev/null
-)" || fail "не удалось прочитать адрес роутера"
-unset NIKKIGO_ROUTER_ADDRESS_B64
+[ -n "${NIKKIGO_ROUTER_ADDRESS:-}" ] || fail "не передан адрес роутера"
+router_address="$NIKKIGO_ROUTER_ADDRESS"
+unset NIKKIGO_ROUTER_ADDRESS
 
 existing_support_url="$(uci -q get nikki.ssh_transibservice.url 2>/dev/null || :)"
 existing_support_host="${existing_support_url#*://}"

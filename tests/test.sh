@@ -175,3 +175,10 @@ grep -q 'nikki restart >"$service_output" 2>&1' "$ROOT/router-install.sh" &&
 	grep -q 'Ответ службы:' "$ROOT/router-install.sh" ||
 	fail 'service restart output handling'
 pass 'service restart output handling'
+
+! grep -q 'base64' "$ROOT/install.sh" &&
+	! grep -q 'base64' "$ROOT/install-ru.ps1" &&
+	! grep -q 'base64' "$ROOT/install-en.ps1" &&
+	! grep -q 'base64' "$ROOT/router-install.sh" ||
+	fail 'router bootstrap must not require base64'
+pass 'base64-free router bootstrap'

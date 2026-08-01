@@ -201,10 +201,16 @@ read_input "Нажмите Enter для 22 или введите другой п
 ssh_port="$REPLY"
 ssh_port="${ssh_port:-22}"
 
-router_b64="$(printf '%s' "$router" | base64 | tr -d '\r\n')"
-base_url_b64="$(printf '%s' "$BASE_URL" | base64 | tr -d '\r\n')"
+case "$BASE_URL" in
+	*"'"*) fail "адрес загрузки содержит недопустимый символ" ;;
+esac
+sanitized_base_url="$(printf '%s' "$BASE_URL" | tr -d '\r\n')"
+[ "$sanitized_base_url" = "$BASE_URL" ] ||
+	fail "адрес загрузки содержит перенос строки"
+router_literal="'$router'"
+base_url_literal="'$BASE_URL'"
 remote_command="
-base_url=\$(printf '%s' '$base_url_b64' | base64 -d) || exit 90
+base_url=$base_url_literal
 tmp=\"/tmp/nikkigo-\$\$.sh\"
 safety=\"/tmp/nikkigo-safety-\$\$.sh\"
 echo '[NikkiGo] SSH-подключение установлено. Скачивание сценария обслуживания...'
@@ -218,7 +224,7 @@ if ! wget -O \"\$safety\" \"\$base_url/router-safety.sh?nikkigo=\$(date +%s)\"; 
 	rm -f \"\$tmp\" \"\$safety\"
 	exit 91
 fi
-NIKKIGO_BASE_URL=\"\$base_url\" NIKKIGO_SAFETY_PATH=\"\$safety\" NIKKIGO_LANGUAGE='ru' NIKKIGO_ROUTER_ADDRESS_B64='$router_b64' ash \"\$tmp\"
+NIKKIGO_BASE_URL=\"\$base_url\" NIKKIGO_SAFETY_PATH=\"\$safety\" NIKKIGO_LANGUAGE='ru' NIKKIGO_ROUTER_ADDRESS=$router_literal ash \"\$tmp\"
 status=\$?
 rm -f \"\$tmp\" \"\$safety\"
 exit \"\$status\"
@@ -245,7 +251,7 @@ if ssh -tt -p "$ssh_port" "$ssh_user@$router" "$remote_command"; then
 else
 	ssh_exit_code=$?
 fi
-unset remote_command router_b64 base_url_b64
+unset remote_command router_literal base_url_literal sanitized_base_url
 
 case "$ssh_exit_code" in
 	0) ;;

@@ -118,12 +118,9 @@ if ($sshPort -notmatch '^\d{1,5}$' -or [int]$sshPort -gt 65535) {
     Stop-WithError 'Invalid SSH port.'
 }
 
-$routerB64 = [Convert]::ToBase64String(
-    [Text.Encoding]::UTF8.GetBytes($router)
-)
-$baseUrlB64 = [Convert]::ToBase64String(
-    [Text.Encoding]::UTF8.GetBytes($BaseUrl)
-)
+if ($BaseUrl -match "['`r`n]") {
+    Stop-WithError 'The download address contains an unsupported character.'
+}
 
 Write-Host ''
 Write-Host '============================================================' -ForegroundColor Cyan
@@ -142,7 +139,7 @@ Write-Host ''
 Write-Host 'After login, the router will offer install, update, or removal.' -ForegroundColor Cyan
 Write-Host 'Waiting for SSH...' -ForegroundColor Green
 $remoteCommand = @'
-base_url=$(printf '%s' '__BASE_URL_B64__' | base64 -d) || exit 90
+base_url='__BASE_URL__'
 tmp="/tmp/nikkigo-$$.sh"
 safety="/tmp/nikkigo-safety-$$.sh"
 echo "[NikkiGo] SSH connection established. Downloading the maintenance script..."
@@ -156,13 +153,13 @@ if ! wget -O "$safety" "$base_url/router-safety.sh?nikkigo=$(date +%s)"; then
     rm -f "$tmp" "$safety"
     exit 91
 fi
-NIKKIGO_BASE_URL="$base_url" NIKKIGO_SAFETY_PATH="$safety" NIKKIGO_LANGUAGE='en' NIKKIGO_ROUTER_ADDRESS_B64='__ROUTER_B64__' ash "$tmp"
+NIKKIGO_BASE_URL="$base_url" NIKKIGO_SAFETY_PATH="$safety" NIKKIGO_LANGUAGE='en' NIKKIGO_ROUTER_ADDRESS='__ROUTER_ADDRESS__' ash "$tmp"
 status=$?
 rm -f "$tmp" "$safety"
 exit "$status"
 '@
-$remoteCommand = $remoteCommand.Replace('__BASE_URL_B64__', $baseUrlB64)
-$remoteCommand = $remoteCommand.Replace('__ROUTER_B64__', $routerB64)
+$remoteCommand = $remoteCommand.Replace('__BASE_URL__', $BaseUrl)
+$remoteCommand = $remoteCommand.Replace('__ROUTER_ADDRESS__', $router)
 & ssh -tt -p $sshPort "$sshUser@$router" $remoteCommand
 $sshExitCode = $LASTEXITCODE
 if ($sshExitCode -eq -1 -or $sshExitCode -eq 255) {
