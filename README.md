@@ -99,10 +99,18 @@ Diagnostics distinguish subscription download, YAML structure, core startup,
 local API, DNS/HTTPS, and Zashboard failures. Daily updates write a short
 sanitized result to `/var/log/nikkigo-update.log`.
 
+Before each daily subscription update, NikkiGo temporarily captures the
+current choice of every selector group. After validating the new profile, it
+assigns safe defaults to new or changed groups and restores every still-valid
+previous choice. Removed or renamed groups do not abort the update. If a
+restored choice breaks connectivity, recovery tests one alternative at a time
+and reverts each unsuccessful attempt. Mihomo persistence is enabled through
+`nikki.mixin.selection_cache=1`.
+
 The SSH password is neither stored nor handled by NikkiGo. The system SSH
 client requests it directly.
 
-For additional help, contact the you're provider and send a screenshot from the launch command
+For additional help, contact your provider and send a screenshot from the launch command
 through the error, or copy the complete console output.
 
 ## Requirements

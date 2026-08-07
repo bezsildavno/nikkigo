@@ -75,6 +75,90 @@ grep -q 'restore_state' "$ROOT/router-update.sh" &&
 	fail 'transactional updater wiring'
 pass 'transactional updater wiring'
 
+capture_line="$(grep -n '^capture_previous_selections' "$ROOT/router-update.sh" | head -n 1 | cut -d: -f1)"
+update_line="$(grep -n 'update_subscription "$SECTION"' "$ROOT/router-update.sh" | head -n 1 | cut -d: -f1)"
+safe_select_line="$(grep -n '^select_safe_proxies' "$ROOT/router-update.sh" | head -n 1 | cut -d: -f1)"
+restore_select_line="$(grep -n '^restore_previous_selections' "$ROOT/router-update.sh" | head -n 1 | cut -d: -f1)"
+health_line="$(grep -n '^if ! health_check' "$ROOT/router-update.sh" | head -n 1 | cut -d: -f1)"
+[ "$capture_line" -lt "$update_line" ] &&
+	[ "$safe_select_line" -lt "$restore_select_line" ] &&
+	[ "$restore_select_line" -lt "$health_line" ] ||
+	fail 'selector preservation update order'
+grep -q 'nikkigo.main.subscription_section' "$ROOT/router-update.sh" &&
+	! grep -q "^SECTION='ssh_transibservice'" "$ROOT/router-update.sh" ||
+	fail 'dynamic subscription section'
+pass 'selector preservation update order'
+
+selector_state="$TMP/selector-state"
+mkdir -p "$selector_state"
+printf 'group-a\tnode-a\ngroup-b\tnode-b\n' > "$selector_state/previous-selections.tsv"
+(
+	NIKKIGO_STATE_DIR="$selector_state"
+	. "$ROOT/router-safety.sh"
+	controller_url() { printf 'http://127.0.0.1:9090'; }
+	api_get() { printf '{"proxies":{}}'; }
+	selection_exists_in_snapshot() { return 0; }
+	api_select() { printf '%s=%s\n' "$2" "$3" >> "$selector_state/applied-all"; }
+	restore_previous_selections > "$selector_state/log-all"
+)
+[ "$(wc -l < "$selector_state/applied-all")" -eq 2 ] ||
+	fail 'all previous selector choices restored'
+grep -q 'восстановлено: 2' "$selector_state/log-all" ||
+	fail 'selector restore summary'
+pass 'all previous selector choices restored'
+
+rm -f "$selector_state/applied-missing"
+(
+	NIKKIGO_STATE_DIR="$selector_state"
+	. "$ROOT/router-safety.sh"
+	controller_url() { printf 'http://127.0.0.1:9090'; }
+	api_get() { printf '{"proxies":{}}'; }
+	selection_exists_in_snapshot() { [ "$2" = 'group-a' ]; }
+	api_select() { printf '%s=%s\n' "$2" "$3" >> "$selector_state/applied-missing"; }
+	restore_previous_selections > "$selector_state/log-missing"
+)
+[ "$(wc -l < "$selector_state/applied-missing")" -eq 1 ] &&
+	grep -q 'отсутствуют в новой подписке: 1' "$selector_state/log-missing" ||
+	fail 'missing choice is skipped without aborting'
+grep -q 'node-a\|node-b' "$selector_state/log-missing" &&
+	fail 'selector node names leaked into log'
+pass 'missing and renamed selector choices are non-fatal'
+
+rm -f "$selector_state/applied-rejected"
+(
+	NIKKIGO_STATE_DIR="$selector_state"
+	. "$ROOT/router-safety.sh"
+	controller_url() { printf 'http://127.0.0.1:9090'; }
+	api_get() { printf '{"proxies":{}}'; }
+	selection_exists_in_snapshot() { return 0; }
+	api_select() {
+		[ "$2" = 'group-a' ] || return 1
+		printf '%s=%s\n' "$2" "$3" >> "$selector_state/applied-rejected"
+	}
+	restore_previous_selections > "$selector_state/log-rejected"
+)
+[ "$(wc -l < "$selector_state/applied-rejected")" -eq 1 ] &&
+	grep -q 'API отклонил восстановление групп: 1' "$selector_state/log-rejected" &&
+	grep -q 'отсутствуют в новой подписке: 0' "$selector_state/log-rejected" ||
+	fail 'API rejection is reported separately and remains non-fatal'
+grep -q 'node-a\|node-b' "$selector_state/log-rejected" &&
+	fail 'rejected selector node names leaked into log'
+pass 'Mihomo API rejection is non-fatal and anonymized'
+
+capture_state="$TMP/capture-unavailable"
+mkdir -p "$capture_state"
+(
+	NIKKIGO_STATE_DIR="$capture_state"
+	. "$ROOT/router-safety.sh"
+	controller_url() { printf 'http://127.0.0.1:9090'; }
+	api_get() { return 1; }
+	capture_previous_selections > "$capture_state/log"
+)
+[ ! -s "$capture_state/previous-selections.tsv" ] &&
+	grep -q 'обновление продолжится' "$capture_state/log" ||
+	fail 'unavailable API before update is non-fatal'
+pass 'unavailable API before update is non-fatal'
+
 grep -q '\[ "$tested" -lt 8 \]' "$ROOT/router-safety.sh" &&
 	grep -q 'timeout=4000' "$ROOT/router-safety.sh" ||
 	fail 'bounded proxy recovery'
@@ -243,6 +327,19 @@ subscription_prompt_line="$(grep -n "CURRENT_STAGE='ввод ссылки под
 [ "$package_only_line" -lt "$subscription_prompt_line" ] ||
 	fail 'package-only update must exit before subscription prompt'
 pass 'package-only update action'
+
+grep -q "nikki.mixin.selection_cache='1'" "$ROOT/router-install.sh" ||
+	fail 'Mihomo selected-proxy persistence enabled'
+grep -q "nikki.mixin.selection_cache='1'" "$ROOT/router-update.sh" ||
+	fail 'scheduled updater must enforce Mihomo selected-proxy persistence'
+pass 'Mihomo selected-proxy persistence enabled'
+
+grep -q '^atomic_install_script()' "$ROOT/router-install.sh" &&
+	grep -q 'ash -n "$temporary"' "$ROOT/router-install.sh" &&
+	grep -q 'mv -f "$temporary" "$destination"' "$ROOT/router-install.sh" &&
+	grep -q "sed -i '/# nikkigo-update\$/d'" "$ROOT/router-install.sh" ||
+	fail 'atomic maintenance scripts and idempotent cron'
+pass 'atomic maintenance scripts and idempotent cron'
 
 grep -q 'config/auto-upgrade-core' "$ROOT/router-safety.sh" &&
 	grep -q 'config/auto-upgrade' "$ROOT/router-safety.sh" &&

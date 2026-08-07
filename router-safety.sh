@@ -5,6 +5,7 @@ NIKKIGO_CONFIG="${NIKKIGO_CONFIG:-/etc/config/nikki}"
 NIKKIGO_SUBSCRIPTIONS="${NIKKIGO_SUBSCRIPTIONS:-/etc/nikki/subscriptions}"
 NIKKIGO_RUN="${NIKKIGO_RUN:-/etc/nikki/run}"
 NIKKIGO_SERVICE="${NIKKIGO_SERVICE:-/etc/init.d/nikki}"
+NIKKIGO_MANAGER_CONFIG="${NIKKIGO_MANAGER_CONFIG:-/etc/config/nikkigo}"
 NIKKIGO_TRANSACTION=0
 
 safe_log() {
@@ -33,6 +34,14 @@ backup_state() {
 			safe_log "Не удалось сохранить конфигурацию Nikki."
 			return 1
 		fi
+	fi
+	if [ -f "$NIKKIGO_MANAGER_CONFIG" ]; then
+		if ! cp -p "$NIKKIGO_MANAGER_CONFIG" "$NIKKIGO_STATE_DIR/nikkigo.uci"; then
+			safe_log "Не удалось сохранить конфигурацию NikkiGo."
+			return 1
+		fi
+	else
+		: > "$NIKKIGO_STATE_DIR/nikkigo.absent"
 	fi
 	if [ -d "$NIKKIGO_SUBSCRIPTIONS" ]; then
 		for subscription_backup in "$NIKKIGO_SUBSCRIPTIONS"/*.yaml; do
@@ -81,7 +90,15 @@ restore_state() {
 		uci -q revert nikki 2>/dev/null || :
 	fi
 	if [ -d "$NIKKIGO_STATE_DIR/subscriptions" ]; then
+		rm -f "$NIKKIGO_SUBSCRIPTIONS"/*.yaml 2>/dev/null || :
 		cp -p "$NIKKIGO_STATE_DIR/subscriptions"/*.yaml "$NIKKIGO_SUBSCRIPTIONS/" 2>/dev/null || :
+	fi
+	if [ -f "$NIKKIGO_STATE_DIR/nikkigo.uci" ]; then
+		cp -p "$NIKKIGO_STATE_DIR/nikkigo.uci" "$NIKKIGO_MANAGER_CONFIG" 2>/dev/null || :
+		uci -q revert nikkigo 2>/dev/null || :
+	elif [ -f "$NIKKIGO_STATE_DIR/nikkigo.absent" ]; then
+		rm -f "$NIKKIGO_MANAGER_CONFIG"
+		uci -q unload nikkigo 2>/dev/null || :
 	fi
 	if [ "$(cat "$NIKKIGO_STATE_DIR/enabled" 2>/dev/null || printf 0)" = '1' ]; then
 		uci -q set nikki.config.enabled='1'
@@ -192,6 +209,87 @@ api_select() {
 	fi
 }
 
+wait_for_api() {
+	api="$(controller_url)"
+	attempt=1
+	while [ "$attempt" -le 10 ]; do
+		api_get "$api/version" >/dev/null 2>&1 && return 0
+		sleep 1
+		attempt=$((attempt + 1))
+	done
+	return 1
+}
+
+capture_previous_selections() {
+	snapshot="$NIKKIGO_STATE_DIR/previous-selections.tsv"
+	proxies_snapshot="$NIKKIGO_STATE_DIR/previous-proxies.json"
+	: > "$snapshot" || return 1
+	api="$(controller_url)"
+	if ! api_get "$api/proxies" > "$proxies_snapshot"; then
+		safe_log 'Предупреждение: текущие selector-группы получить не удалось; обновление продолжится с безопасным автовыбором.'
+		rm -f "$proxies_snapshot"
+		return 0
+	fi
+	if ! yq -r '.proxies | to_entries[] |
+		select(.value.type == "Selector") |
+		select((.value.now // "") != "") |
+		[.key, .value.now] | @tsv' "$proxies_snapshot" > "$snapshot" 2>/dev/null; then
+		safe_log 'Предупреждение: снимок selector-групп разобрать не удалось; обновление продолжится с безопасным автовыбором.'
+		: > "$snapshot"
+	fi
+	rm -f "$proxies_snapshot"
+	saved_count="$(awk 'NF >= 2 { count++ } END { print count + 0 }' "$snapshot")"
+	safe_log "Сохранено групп: $saved_count."
+	return 0
+}
+
+selection_exists_in_snapshot() {
+	proxies_file="$1"
+	group_name="$2"
+	choice_name="$3"
+	GROUP_NAME="$group_name" CHOICE_NAME="$choice_name" yq -e '
+		.proxies[strenv(GROUP_NAME)] as $group |
+		$group.type == "Selector" and
+		(($group.all // []) | any_c(. == strenv(CHOICE_NAME)))
+	' "$proxies_file" >/dev/null 2>&1
+}
+
+restore_previous_selections() {
+	snapshot="$NIKKIGO_STATE_DIR/previous-selections.tsv"
+	[ -s "$snapshot" ] || {
+		safe_log 'Сохранено групп: 0; восстановлено: 0; отсутствуют в новой подписке: 0.'
+		return 0
+	}
+	current_proxies="$NIKKIGO_STATE_DIR/current-proxies.json"
+	api="$(controller_url)"
+	if ! api_get "$api/proxies" > "$current_proxies"; then
+		safe_log 'Предупреждение: Mihomo API недоступен для восстановления selector-групп; безопасный автовыбор сохранён.'
+		return 0
+	fi
+	saved=0
+	restored=0
+	missing=0
+	rejected=0
+	while IFS="$(printf '\t')" read -r group choice; do
+		[ -n "$group" ] && [ -n "$choice" ] || continue
+		saved=$((saved + 1))
+		if ! selection_exists_in_snapshot "$current_proxies" "$group" "$choice"; then
+			missing=$((missing + 1))
+			continue
+		fi
+		if api_select "$api" "$group" "$choice"; then
+			restored=$((restored + 1))
+		else
+			rejected=$((rejected + 1))
+		fi
+	done < "$snapshot"
+	rm -f "$current_proxies"
+	[ "$rejected" -eq 0 ] ||
+		safe_log "Предупреждение: Mihomo API отклонил восстановление групп: $rejected; обновление продолжено."
+	safe_log "Сохранено групп: $saved; восстановлено: $restored; отсутствуют в новой подписке: $missing."
+	return 0
+}
+
 select_safe_proxies() {
 	api="$(controller_url)"
 	api_get "$api/proxies" > "$NIKKIGO_STATE_DIR/proxies.json" || return 1
@@ -255,11 +353,11 @@ https_available() {
 try_recover_proxies() {
 	api="$(controller_url)"
 	api_get "$api/proxies" > "$NIKKIGO_STATE_DIR/recovery-proxies.json" || return 1
-	yq -r '.proxies | to_entries[] |
+	yq -r '.proxies as $all | .proxies | to_entries[] |
 		select(.value.type == "Selector") |
 		.key as $group | (.value.all // [])[] |
 		select(. != "DIRECT" and . != "REJECT") |
-		[$group, .] | @tsv' \
+		[$group, ., ($all[$group].now // "")] | @tsv' \
 		"$NIKKIGO_STATE_DIR/recovery-proxies.json" \
 		> "$NIKKIGO_STATE_DIR/recovery-candidates-raw.tsv" 2>/dev/null || return 1
 
@@ -278,9 +376,10 @@ try_recover_proxies() {
 	tested=0
 	delay_passed=0
 	applied=0
-	while IFS="$(printf '\t')" read -r group candidate; do
+	while IFS="$(printf '\t')" read -r group candidate original; do
 		[ -n "$group" ] && [ -n "$candidate" ] || continue
 		[ "$tested" -lt 8 ] || break
+		[ "$candidate" = "$original" ] && continue
 		tested=$((tested + 1))
 		encoded="$(url_encode "$candidate")"
 		if api_get "$api/proxies/$encoded/delay?timeout=4000&url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204" \
@@ -293,6 +392,7 @@ try_recover_proxies() {
 				safe_log "Автоподбор успешен: проверено $tested, delay-test прошли $delay_passed, применено $applied."
 				return 0
 			fi
+			[ -z "$original" ] || api_select "$api" "$group" "$original" >/dev/null 2>&1 || :
 		fi
 	done < "$NIKKIGO_STATE_DIR/recovery-candidates.tsv"
 	safe_log "Автоподбор не помог: проверено $tested, delay-test прошли $delay_passed, применено $applied."

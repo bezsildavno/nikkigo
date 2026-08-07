@@ -251,6 +251,34 @@ patch_nikki_watchdog() {
 	say "nikki-watchdog защищён от запуска при выключенном Nikki."
 }
 
+atomic_install_script() {
+	source_file="$1"
+	destination="$2"
+	temporary="${destination}.tmp.$$"
+	backup="${destination}.nikkigo.bak"
+	[ -r "$source_file" ] || return 1
+	ash -n "$source_file" || return 1
+	mkdir -p "${destination%/*}" || return 1
+	if [ -f "$destination" ]; then
+		cp -p "$destination" "$backup" || return 1
+	fi
+	cp -p "$source_file" "$temporary" || return 1
+	chmod 755 "$temporary" || {
+		rm -f "$temporary"
+		return 1
+	}
+	if ! ash -n "$temporary"; then
+		rm -f "$temporary"
+		return 1
+	fi
+	if ! mv -f "$temporary" "$destination"; then
+		rm -f "$temporary"
+		[ ! -f "$backup" ] || cp -p "$backup" "$destination" 2>/dev/null || :
+		return 1
+	fi
+	return 0
+}
+
 cleanup() {
 	restore_remote_terminal
 	unset NIKKIGO_LANGUAGE NIKKIGO_ROUTER_ADDRESS router_address subscription_url action
@@ -301,6 +329,15 @@ CURRENT_STAGE='определение адреса панели управлен
 [ -n "${NIKKIGO_ROUTER_ADDRESS:-}" ] || fail "не передан адрес роутера"
 router_address="$NIKKIGO_ROUTER_ADDRESS"
 unset NIKKIGO_ROUTER_ADDRESS
+
+subscription_section="$(uci -q get nikkigo.main.subscription_section 2>/dev/null || :)"
+if [ -z "$subscription_section" ] && uci -q get nikki.ssh_transibservice >/dev/null 2>&1; then
+	subscription_section='ssh_transibservice'
+fi
+subscription_section="${subscription_section:-nikkigo_subscription}"
+case "$subscription_section" in
+	*[!a-zA-Z0-9_]*) fail "некорректный section ID подписки NikkiGo" ;;
+esac
 
 CURRENT_STAGE='проверка доступа к GitHub'
 say "Проверка соединения с GitHub"
@@ -353,6 +390,12 @@ CURRENT_STAGE='создание резервной копии рабочего �
 say "Сохранение текущей конфигурации и состояния Taproom Nikki"
 if ! backup_state; then
 	fail "не удалось создать резервную копию перед установкой"
+fi
+if [ -x /etc/init.d/nikki ] && /etc/init.d/nikki running >/dev/null 2>&1; then
+	capture_previous_selections ||
+		say "Предупреждение: текущий выбор selector-групп сохранить не удалось."
+else
+	: > "$NIKKIGO_STATE_DIR/previous-selections.tsv"
 fi
 enable_fail_open
 say "Предварительная загрузка Zashboard"
@@ -485,9 +528,9 @@ say "Автообновление самого пакета upstream не пре
 say "NikkiGo включит автоматическое обновление подписки."
 
 CURRENT_STAGE='ввод ссылки подписки'
-if uci -q get nikki.ssh_transibservice >/dev/null 2>&1; then
-	existing_name="$(uci -q get nikki.ssh_transibservice.name || true)"
-	say "Подписка ${existing_name:-ssh_transibservice} уже существует."
+if uci -q get "nikki.$subscription_section" >/dev/null 2>&1; then
+	existing_name="$(uci -q get "nikki.$subscription_section.name" || true)"
+	say "Подписка ${existing_name:-$subscription_section} уже существует."
 	say "Новая копия создана не будет; существующая подписка будет обновлена."
 fi
 read_remote_input "Вставьте ссылку подписки"
@@ -518,7 +561,7 @@ else
 fi
 say "Имя подписки определено из ссылки: $subscription_name"
 
-existing_url="$(uci -q get nikki.ssh_transibservice.url || true)"
+existing_url="$(uci -q get "nikki.$subscription_section.url" || true)"
 if [ -n "$existing_url" ]; then
 	if [ "$existing_url" = "$subscription_url" ]; then
 		say "Введена та же ссылка. Выполняется обновление существующей подписки."
@@ -546,25 +589,27 @@ EOF
 	uci commit nikki
 fi
 
-uci -q batch <<EOF
-set nikki.ssh_transibservice=subscription
-set nikki.ssh_transibservice.name='$subscription_name'
-set nikki.ssh_transibservice.url='$subscription_url'
-set nikki.ssh_transibservice.user_agent='Clash.Meta'
-set nikki.ssh_transibservice.prefer='remote'
-commit nikki
-EOF
+uci -q set "nikki.$subscription_section=subscription"
+uci -q set "nikki.$subscription_section.name=$subscription_name"
+uci -q set "nikki.$subscription_section.url=$subscription_url"
+uci -q set "nikki.$subscription_section.user_agent=Clash.Meta"
+uci -q set "nikki.$subscription_section.prefer=remote"
+uci -q set nikki.mixin.selection_cache='1'
+uci -q commit nikki
+uci -q set nikkigo.main='nikkigo'
+uci -q set "nikkigo.main.subscription_section=$subscription_section"
+uci -q commit nikkigo
 unset subscription_url NIKKIGO_SUBSCRIPTION_B64
 
 say "Загрузка и проверка подписки"
 CURRENT_STAGE='загрузка и проверка подписки'
-/etc/init.d/nikki update_subscription ssh_transibservice
-success="$(uci -q get nikki.ssh_transibservice.success || true)"
+/etc/init.d/nikki update_subscription "$subscription_section"
+success="$(uci -q get "nikki.$subscription_section.success" || true)"
 if [ "$success" != '1' ]; then
 	fail "Nikki не смог загрузить подписку; будет восстановлено прежнее состояние"
 fi
 
-subscription_file="/etc/nikki/subscriptions/ssh_transibservice.yaml"
+subscription_file="/etc/nikki/subscriptions/$subscription_section.yaml"
 CURRENT_STAGE='проверка синтаксиса нового профиля'
 yq -M -p yaml -o yaml -e \
 	'(has("proxies") or has("proxy-providers")) and has("proxy-groups")' \
@@ -574,7 +619,7 @@ yq -M -p yaml -o yaml -e \
 CURRENT_STAGE='безопасный запуск ядра без перехвата трафика'
 say "Проверка ядра без перехвата DNS и трафика"
 uci -q batch <<EOF
-set nikki.config.profile='subscription:ssh_transibservice'
+set nikki.config.profile='subscription:$subscription_section'
 set nikki.config.enabled='1'
 set nikki.proxy.enabled='0'
 commit nikki
@@ -597,6 +642,8 @@ sleep 3
 	fail "ядро Taproom Nikki не запустилось; будет выполнен rollback"
 validate_profile /etc/nikki/run/config.yaml ||
 	fail "итоговый профиль не прошёл проверку ядра; будет выполнен rollback"
+wait_for_api ||
+	fail "локальный Mihomo API не запустился; будет выполнен rollback"
 
 CURRENT_STAGE='подготовка панели Zashboard'
 if ensure_zashboard; then
@@ -609,6 +656,7 @@ fi
 CURRENT_STAGE='безопасный выбор прокси'
 select_safe_proxies ||
 	say "Предварительный выбор proxy-group не выполнен; будет использована функциональная проверка."
+restore_previous_selections
 
 CURRENT_STAGE='включение перехвата и проверка интернета'
 say "Включение Taproom Nikki и проверка DNS/HTTPS"
@@ -644,18 +692,21 @@ fi
 CURRENT_STAGE='настройка ежедневного обновления подписки'
 say "Настройка ежедневного обновления подписки на 05:00"
 mkdir -p /usr/lib/nikkigo
-cp "$NIKKIGO_SAFETY_PATH" /usr/lib/nikkigo/safety.sh
-wget -q -O /usr/lib/nikkigo/update.sh \
+update_staged="$NIKKIGO_STATE_DIR/update.sh"
+wget -q -O "$update_staged" \
 	"$NIKKIGO_BASE_URL/router-update.sh?nikkigo=$(date +%s)" ||
 	fail "не удалось установить безопасный модуль ежедневного обновления"
-chmod 755 /usr/lib/nikkigo/safety.sh /usr/lib/nikkigo/update.sh
+atomic_install_script "$NIKKIGO_SAFETY_PATH" /usr/lib/nikkigo/safety.sh ||
+	fail "не удалось атомарно установить safety.sh"
+atomic_install_script "$update_staged" /usr/lib/nikkigo/update.sh ||
+	fail "не удалось атомарно установить update.sh"
 sed -i '/# nikkigo-update$/d' /etc/crontabs/root
-echo '0 5 * * * /usr/lib/nikkigo/update.sh >>/var/log/nikkigo-update.log 2>&1 # nikkigo-update' >> /etc/crontabs/root
+echo "0 5 * * * /usr/lib/nikkigo/update.sh '$subscription_section' >>/var/log/nikkigo-update.log 2>&1 # nikkigo-update" >> /etc/crontabs/root
 /etc/init.d/cron restart
 commit_state
 
-expire_at="$(uci -q get nikki.ssh_transibservice.expire || true)"
-updated_at="$(uci -q get nikki.ssh_transibservice.update || true)"
+expire_at="$(uci -q get "nikki.$subscription_section.expire" || true)"
+updated_at="$(uci -q get "nikki.$subscription_section.update" || true)"
 say "Подписка $subscription_name успешно загружена."
 if [ -n "$updated_at" ]; then
 	say "Последнее обновление: $updated_at"
