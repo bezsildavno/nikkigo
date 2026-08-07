@@ -18,16 +18,17 @@ uci -q get "nikki.$SECTION" >/dev/null 2>&1 || {
 
 rollback() {
 	safe_log "Обновление подписки отменено: $reason"
-	restore_state
+	restore_state || :
 	exit 1
 }
 
 finish() {
 	status=$?
 	trap - EXIT
-	if [ "$status" -ne 0 ] && [ "${NIKKIGO_TRANSACTION:-0}" = '1' ]; then
+	if [ "$status" -ne 0 ] && [ "${NIKKIGO_TRANSACTION:-0}" = '1' ] &&
+		[ "${NIKKIGO_ROLLBACK_ACTIVE:-0}" != '1' ]; then
 		safe_log "Неожиданная ошибка обновления: $reason"
-		restore_state
+		restore_state || :
 	fi
 	exit "$status"
 }

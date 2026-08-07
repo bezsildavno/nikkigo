@@ -115,7 +115,7 @@ rm -f "$selector_state/applied-missing"
 	api_get() { printf '{"proxies":{}}'; }
 	selection_exists_in_snapshot() { [ "$2" = 'group-a' ]; }
 	api_select() { printf '%s=%s\n' "$2" "$3" >> "$selector_state/applied-missing"; }
-	restore_previous_selections > "$selector_state/log-missing"
+	restore_previous_selections rollback > "$selector_state/log-missing"
 )
 [ "$(wc -l < "$selector_state/applied-missing")" -eq 1 ] &&
 	grep -q 'отсутствуют в новой подписке: 1' "$selector_state/log-missing" ||
@@ -135,7 +135,7 @@ rm -f "$selector_state/applied-rejected"
 		[ "$2" = 'group-a' ] || return 1
 		printf '%s=%s\n' "$2" "$3" >> "$selector_state/applied-rejected"
 	}
-	restore_previous_selections > "$selector_state/log-rejected"
+	restore_previous_selections rollback > "$selector_state/log-rejected"
 )
 [ "$(wc -l < "$selector_state/applied-rejected")" -eq 1 ] &&
 	grep -q 'API отклонил восстановление групп: 1' "$selector_state/log-rejected" &&
@@ -158,6 +158,148 @@ mkdir -p "$capture_state"
 	grep -q 'обновление продолжится' "$capture_state/log" ||
 	fail 'unavailable API before update is non-fatal'
 pass 'unavailable API before update is non-fatal'
+
+rollback_root="$TMP/rollback-selectors"
+rollback_state="$rollback_root/state"
+rollback_subscriptions="$rollback_root/subscriptions"
+rollback_run="$rollback_root/run"
+rollback_service="$rollback_root/nikki-service"
+rollback_ops="$rollback_root/operations"
+rollback_applied="$rollback_root/applied"
+mkdir -p "$rollback_state/subscriptions" "$rollback_subscriptions" "$rollback_run"
+printf 'old-config\n' > "$rollback_state/nikki.uci"
+printf 'old-manager\n' > "$rollback_state/nikkigo.uci"
+printf 'old-profile\n' > "$rollback_state/subscriptions/current.yaml"
+printf 'new-config\n' > "$rollback_root/nikki.conf"
+printf 'new-manager\n' > "$rollback_root/nikkigo.conf"
+printf 'new-profile\n' > "$rollback_subscriptions/current.yaml"
+printf 'unexpected-profile\n' > "$rollback_subscriptions/extra.yaml"
+printf '1\n' > "$rollback_state/enabled"
+printf '1\n' > "$rollback_state/running"
+printf '1\n' > "$rollback_state/healthy"
+printf 'group-a\tnode-a\ngroup-b\tnode-b\n' > "$rollback_state/previous-selections.tsv"
+printf 'cache-must-survive\n' > "$rollback_root/cache.db"
+cat > "$rollback_service" <<'EOF'
+#!/bin/sh
+printf 'service:%s\n' "$1" >> "$ROLLBACK_SERVICE_LOG"
+exit 0
+EOF
+chmod +x "$rollback_service"
+(
+	NIKKIGO_STATE_DIR="$rollback_state"
+	NIKKIGO_CONFIG="$rollback_root/nikki.conf"
+	NIKKIGO_MANAGER_CONFIG="$rollback_root/nikkigo.conf"
+	NIKKIGO_SUBSCRIPTIONS="$rollback_subscriptions"
+	NIKKIGO_RUN="$rollback_run"
+	NIKKIGO_SERVICE="$rollback_service"
+	ROLLBACK_SERVICE_LOG="$rollback_ops"
+	export ROLLBACK_SERVICE_LOG
+	. "$ROOT/router-safety.sh"
+	NIKKIGO_TRANSACTION=1
+	uci() {
+		printf 'uci:%s\n' "$*" >> "$rollback_ops"
+		case "$*" in
+			*'get nikki.proxy.enabled'*) printf '1\n' ;;
+		esac
+		return 0
+	}
+	wait_for_api() { printf 'api:ready\n' >> "$rollback_ops"; return 0; }
+	controller_url() { printf 'http://127.0.0.1:9090'; }
+	api_get() { printf '{"proxies":{}}'; }
+	selection_exists_in_snapshot() { [ -f "$rollback_state/previous-selections.tsv" ]; }
+	api_select() {
+		[ -f "$rollback_state/previous-selections.tsv" ] || return 1
+		printf '%s=%s\n' "$2" "$3" >> "$rollback_applied"
+		printf 'api:select\n' >> "$rollback_ops"
+	}
+	restore_state > "$rollback_root/log"
+)
+[ "$(cat "$rollback_root/nikki.conf")" = 'old-config' ] &&
+	[ "$(cat "$rollback_root/nikkigo.conf")" = 'old-manager' ] &&
+	[ "$(cat "$rollback_subscriptions/current.yaml")" = 'old-profile' ] &&
+	[ ! -f "$rollback_subscriptions/extra.yaml" ] ||
+	fail 'rollback must restore old configuration and subscriptions'
+[ "$(wc -l < "$rollback_applied")" -eq 2 ] ||
+	fail 'rollback must restore all compatible previous selectors'
+[ "$(cat "$rollback_root/cache.db")" = 'cache-must-survive' ] ||
+	fail 'rollback must not modify cache.db'
+[ ! -e "$rollback_state" ] ||
+	fail 'transaction state must be removed after selector rollback completes'
+proxy_off_line="$(grep -n "nikki.proxy.enabled=0" "$rollback_ops" | tail -n 1 | cut -d: -f1)"
+selection_cache_line="$(grep -n "nikki.mixin.selection_cache=1" "$rollback_ops" | tail -n 1 | cut -d: -f1)"
+first_selector_line="$(grep -n 'api:select' "$rollback_ops" | head -n 1 | cut -d: -f1)"
+proxy_on_line="$(grep -n "nikki.proxy.enabled=1" "$rollback_ops" | tail -n 1 | cut -d: -f1)"
+[ "$proxy_off_line" -lt "$first_selector_line" ] &&
+	[ "$selection_cache_line" -lt "$first_selector_line" ] &&
+	[ "$first_selector_line" -lt "$proxy_on_line" ] ||
+	fail 'rollback selector restoration must run before interception is restored'
+[ "$(grep -c 'api:ready' "$rollback_ops")" -eq 2 ] ||
+	fail 'rollback must verify the API before and after interception restart'
+grep -q 'group-a\|group-b\|node-a\|node-b' "$rollback_root/log" &&
+	fail 'rollback log leaked selector or node names'
+pass 'rollback restores old files and selectors before interception'
+
+rollback_fail_root="$TMP/rollback-api-unavailable"
+rollback_fail_state="$rollback_fail_root/state"
+mkdir -p "$rollback_fail_state/subscriptions" "$rollback_fail_root/subscriptions" "$rollback_fail_root/run"
+printf 'old-config\n' > "$rollback_fail_state/nikki.uci"
+printf 'old-profile\n' > "$rollback_fail_state/subscriptions/current.yaml"
+printf '1\n' > "$rollback_fail_state/enabled"
+printf '1\n' > "$rollback_fail_state/running"
+printf '1\n' > "$rollback_fail_state/healthy"
+printf 'private-group\tprivate-node\n' > "$rollback_fail_state/previous-selections.tsv"
+(
+	NIKKIGO_STATE_DIR="$rollback_fail_state"
+	NIKKIGO_CONFIG="$rollback_fail_root/nikki.conf"
+	NIKKIGO_MANAGER_CONFIG="$rollback_fail_root/nikkigo.conf"
+	NIKKIGO_SUBSCRIPTIONS="$rollback_fail_root/subscriptions"
+	NIKKIGO_RUN="$rollback_fail_root/run"
+	NIKKIGO_SERVICE="$rollback_service"
+	ROLLBACK_SERVICE_LOG="$rollback_fail_root/service-log"
+	export ROLLBACK_SERVICE_LOG
+	. "$ROOT/router-safety.sh"
+	NIKKIGO_TRANSACTION=1
+	uci() {
+		case "$*" in *'get nikki.proxy.enabled'*) printf '1\n' ;; esac
+		return 0
+	}
+	enable_fail_open() { printf 'fail-open\n' >> "$rollback_fail_root/fail-open"; }
+	wait_for_api() { return 1; }
+	restore_previous_selections() {
+		printf 'unexpected selector restore\n' > "$rollback_fail_root/unexpected"
+		return 0
+	}
+	if restore_state > "$rollback_fail_root/log"; then
+		exit 1
+	fi
+)
+[ "$(wc -l < "$rollback_fail_root/fail-open")" -eq 2 ] &&
+	[ ! -e "$rollback_fail_root/unexpected" ] &&
+	[ ! -e "$rollback_fail_state" ] ||
+	fail 'unavailable old-profile API must leave rollback in fail-open'
+grep -q 'private-group\|private-node' "$rollback_fail_root/log" &&
+	fail 'failed rollback log leaked selector or node names'
+pass 'unavailable old-profile API leaves Nikki in fail-open'
+
+restore_files_line="$(grep -n 'cp -p "$NIKKIGO_STATE_DIR/nikki.uci"' "$ROOT/router-safety.sh" | head -n 1 | cut -d: -f1)"
+rollback_proxy_off_line="$(grep -n "uci -q set nikki.proxy.enabled='0'" "$ROOT/router-safety.sh" | head -n 1 | cut -d: -f1)"
+rollback_restore_line="$(grep -n 'restore_previous_selections rollback' "$ROOT/router-safety.sh" | head -n 1 | cut -d: -f1)"
+rollback_proxy_restore_line="$(grep -n 'nikki.proxy.enabled=\$saved_proxy_enabled' "$ROOT/router-safety.sh" | head -n 1 | cut -d: -f1)"
+rollback_cleanup_line="$(grep -n 'rm -rf "$NIKKIGO_STATE_DIR"' "$ROOT/router-safety.sh" | head -n 1 | cut -d: -f1)"
+[ "$restore_files_line" -lt "$rollback_proxy_off_line" ] &&
+	[ "$rollback_proxy_off_line" -lt "$rollback_restore_line" ] &&
+	[ "$rollback_restore_line" -lt "$rollback_proxy_restore_line" ] &&
+	[ "$rollback_proxy_restore_line" -lt "$rollback_cleanup_line" ] ||
+	fail 'rollback source order must preserve state through selector restoration'
+grep -q 'NIKKIGO_ROLLBACK_ACTIVE' "$ROOT/router-update.sh" &&
+	grep -q 'NIKKIGO_ROLLBACK_ACTIVE' "$ROOT/router-install.sh" ||
+	fail 'EXIT traps must guard against recursive rollback'
+[ "$(grep -c '^restore_previous_selections$' "$ROOT/router-update.sh")" -eq 1 ] ||
+	fail 'successful updater must restore selectors exactly once'
+! grep -Eq '(rm|cp|mv)[^#]*cache\.db|cache\.db[^#]*(rm|cp|mv)' \
+	"$ROOT/router-safety.sh" "$ROOT/router-update.sh" "$ROOT/router-install.sh" ||
+	fail 'transaction scripts must not delete or overwrite cache.db'
+pass 'rollback ordering, single success restore, and cache preservation'
 
 grep -q '\[ "$tested" -lt 8 \]' "$ROOT/router-safety.sh" &&
 	grep -q 'timeout=4000' "$ROOT/router-safety.sh" ||

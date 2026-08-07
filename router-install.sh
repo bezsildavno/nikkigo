@@ -134,7 +134,7 @@ cancel_remote() {
 	restore_remote_terminal
 	trap - INT TERM
 	if [ "${NIKKIGO_TRANSACTION:-0}" = '1' ]; then
-		restore_state
+		restore_state || :
 		printf '\n%s[NikkiGo] Отменено пользователем. Безопасное состояние восстановлено.%s\n' \
 			"$C_YELLOW" "$C_RESET"
 	else
@@ -286,8 +286,9 @@ cleanup() {
 
 finish() {
 	status=$?
-	if [ "$status" -ne 0 ] && [ "${NIKKIGO_TRANSACTION:-0}" = '1' ]; then
-		restore_state
+	if [ "$status" -ne 0 ] && [ "${NIKKIGO_TRANSACTION:-0}" = '1' ] &&
+		[ "${NIKKIGO_ROLLBACK_ACTIVE:-0}" != '1' ]; then
+		restore_state || :
 	fi
 	cleanup
 	if [ "$status" -ne 0 ] && [ "$SUPPORT_SHOWN" -eq 0 ]; then

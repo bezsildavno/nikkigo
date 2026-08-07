@@ -7,6 +7,7 @@ NIKKIGO_RUN="${NIKKIGO_RUN:-/etc/nikki/run}"
 NIKKIGO_SERVICE="${NIKKIGO_SERVICE:-/etc/init.d/nikki}"
 NIKKIGO_MANAGER_CONFIG="${NIKKIGO_MANAGER_CONFIG:-/etc/config/nikkigo}"
 NIKKIGO_TRANSACTION=0
+NIKKIGO_ROLLBACK_ACTIVE=0
 
 safe_log() {
 	printf '[NikkiGo] %s\n' "$*" |
@@ -84,36 +85,87 @@ enable_fail_open() {
 }
 
 restore_state() {
-	enable_fail_open
+	NIKKIGO_ROLLBACK_ACTIVE=1
+	rollback_ok=1
+	enable_fail_open || :
 	if [ -f "$NIKKIGO_STATE_DIR/nikki.uci" ]; then
-		cp -p "$NIKKIGO_STATE_DIR/nikki.uci" "$NIKKIGO_CONFIG"
-		uci -q revert nikki 2>/dev/null || :
-	fi
-	if [ -d "$NIKKIGO_STATE_DIR/subscriptions" ]; then
-		rm -f "$NIKKIGO_SUBSCRIPTIONS"/*.yaml 2>/dev/null || :
-		cp -p "$NIKKIGO_STATE_DIR/subscriptions"/*.yaml "$NIKKIGO_SUBSCRIPTIONS/" 2>/dev/null || :
-	fi
-	if [ -f "$NIKKIGO_STATE_DIR/nikkigo.uci" ]; then
-		cp -p "$NIKKIGO_STATE_DIR/nikkigo.uci" "$NIKKIGO_MANAGER_CONFIG" 2>/dev/null || :
-		uci -q revert nikkigo 2>/dev/null || :
-	elif [ -f "$NIKKIGO_STATE_DIR/nikkigo.absent" ]; then
-		rm -f "$NIKKIGO_MANAGER_CONFIG"
-		uci -q unload nikkigo 2>/dev/null || :
-	fi
-	if [ "$(cat "$NIKKIGO_STATE_DIR/enabled" 2>/dev/null || printf 0)" = '1' ]; then
-		uci -q set nikki.config.enabled='1'
-		uci -q commit nikki
-		if [ "$(cat "$NIKKIGO_STATE_DIR/running" 2>/dev/null || printf 0)" = '1' ] &&
-			[ "$(cat "$NIKKIGO_STATE_DIR/healthy" 2>/dev/null || printf 0)" = '1' ]; then
-			"$NIKKIGO_SERVICE" restart >/dev/null 2>&1 || enable_fail_open
+		if cp -p "$NIKKIGO_STATE_DIR/nikki.uci" "$NIKKIGO_CONFIG"; then
+			uci -q revert nikki 2>/dev/null || :
 		else
-			uci -q set nikki.config.enabled='0'
-			uci -q commit nikki
-			safe_log "Прежнее состояние не прошло health-check и оставлено отключённым."
+			safe_log 'Rollback: не удалось восстановить конфигурацию Nikki.'
+			rollback_ok=0
 		fi
 	fi
+	if [ -d "$NIKKIGO_STATE_DIR/subscriptions" ]; then
+		mkdir -p "$NIKKIGO_SUBSCRIPTIONS" 2>/dev/null || rollback_ok=0
+		if ! rm -f "$NIKKIGO_SUBSCRIPTIONS"/*.yaml 2>/dev/null; then
+			safe_log 'Rollback: не удалось удалить файлы неудачного профиля.'
+			rollback_ok=0
+		fi
+		for subscription_backup in "$NIKKIGO_STATE_DIR/subscriptions"/*.yaml; do
+			[ -f "$subscription_backup" ] || continue
+			if ! cp -p "$subscription_backup" "$NIKKIGO_SUBSCRIPTIONS/" 2>/dev/null; then
+				safe_log 'Rollback: не удалось восстановить прежний файл подписки.'
+				rollback_ok=0
+				break
+			fi
+		done
+	fi
+	if [ -f "$NIKKIGO_STATE_DIR/nikkigo.uci" ]; then
+		if cp -p "$NIKKIGO_STATE_DIR/nikkigo.uci" "$NIKKIGO_MANAGER_CONFIG" 2>/dev/null; then
+			uci -q revert nikkigo 2>/dev/null || :
+		else
+			safe_log 'Rollback: не удалось восстановить конфигурацию NikkiGo.'
+			rollback_ok=0
+		fi
+	elif [ -f "$NIKKIGO_STATE_DIR/nikkigo.absent" ]; then
+		rm -f "$NIKKIGO_MANAGER_CONFIG" 2>/dev/null || rollback_ok=0
+		uci -q unload nikkigo 2>/dev/null || :
+	fi
+
+	saved_enabled="$(cat "$NIKKIGO_STATE_DIR/enabled" 2>/dev/null || printf 0)"
+	saved_running="$(cat "$NIKKIGO_STATE_DIR/running" 2>/dev/null || printf 0)"
+	saved_healthy="$(cat "$NIKKIGO_STATE_DIR/healthy" 2>/dev/null || printf 0)"
+	if [ "$saved_enabled" = '1' ]; then
+		if [ "$rollback_ok" = '1' ] &&
+			[ "$saved_running" = '1' ] && [ "$saved_healthy" = '1' ]; then
+			saved_proxy_enabled="$(uci -q get nikki.proxy.enabled 2>/dev/null || printf 0)"
+			case "$saved_proxy_enabled" in 1) ;; *) saved_proxy_enabled=0 ;; esac
+			if uci -q set nikki.config.enabled='1' &&
+				uci -q set nikki.proxy.enabled='0' &&
+				uci -q set nikki.mixin.selection_cache='1' && uci -q commit nikki &&
+				"$NIKKIGO_SERVICE" restart >/dev/null 2>&1 && wait_for_api; then
+				safe_log 'Rollback: старый профиль запущен без перехвата; восстанавливаются пользовательские selector-группы.'
+				if ! restore_previous_selections rollback; then
+					safe_log 'Rollback: локальный Mihomo API недоступен для восстановления selector-групп.'
+					rollback_ok=0
+				fi
+			else
+				safe_log 'Rollback: старый профиль или локальный Mihomo API не запустился.'
+				rollback_ok=0
+			fi
+			if [ "$rollback_ok" = '1' ]; then
+				if uci -q set "nikki.proxy.enabled=$saved_proxy_enabled" &&
+					uci -q commit nikki &&
+					"$NIKKIGO_SERVICE" restart >/dev/null 2>&1 && wait_for_api; then
+					safe_log 'Rollback: прежняя конфигурация, selector-группы и состояние перехвата восстановлены.'
+				else
+					safe_log 'Rollback: не удалось вернуть исходное состояние перехвата.'
+					rollback_ok=0
+				fi
+			fi
+		else
+			safe_log 'Прежнее состояние не прошло health-check и оставлено отключённым.'
+			rollback_ok=0
+		fi
+	fi
+	if [ "$rollback_ok" != '1' ]; then
+		enable_fail_open || :
+	fi
 	NIKKIGO_TRANSACTION=0
+	NIKKIGO_ROLLBACK_ACTIVE=0
 	rm -rf "$NIKKIGO_STATE_DIR"
+	[ "$rollback_ok" = '1' ]
 }
 
 restore_after_package_update() {
@@ -255,6 +307,7 @@ selection_exists_in_snapshot() {
 }
 
 restore_previous_selections() {
+	restore_mode="${1:-update}"
 	snapshot="$NIKKIGO_STATE_DIR/previous-selections.tsv"
 	[ -s "$snapshot" ] || {
 		safe_log 'Сохранено групп: 0; восстановлено: 0; отсутствуют в новой подписке: 0.'
@@ -264,6 +317,9 @@ restore_previous_selections() {
 	api="$(controller_url)"
 	if ! api_get "$api/proxies" > "$current_proxies"; then
 		safe_log 'Предупреждение: Mihomo API недоступен для восстановления selector-групп; безопасный автовыбор сохранён.'
+		if [ "$restore_mode" = 'rollback' ]; then
+			return 1
+		fi
 		return 0
 	fi
 	saved=0
